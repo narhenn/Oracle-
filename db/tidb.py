@@ -79,6 +79,7 @@ class TiDBClient:
                     thesis_text  TEXT NOT NULL,
                     confidence   FLOAT NOT NULL DEFAULT 0.0,
                     evidence_ids VARCHAR(500),
+                    alerted      BOOLEAN DEFAULT FALSE,
                     timestamp    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
                     INDEX idx_company (company),
                     INDEX idx_confidence (confidence)
@@ -235,7 +236,42 @@ class TiDBClient:
             conn.close()
 
     def get_high_confidence_theses(self, threshold: float = 75.0) -> list[dict]:
-        return self.get_theses(min_confidence=threshold)
+        """Fetch high-confidence theses that have NOT been alerted yet."""
+        conn = self._get_conn()
+        cursor = conn.cursor(dictionary=True)
+        try:
+            cursor.execute(
+                """
+                SELECT * FROM theses
+                WHERE confidence >= %s AND alerted = FALSE
+                ORDER BY timestamp DESC
+                """,
+                (threshold,),
+            )
+            return cursor.fetchall()
+        except Error as e:
+            logger.error("get_high_confidence_theses failed: %s", e)
+            raise
+        finally:
+            cursor.close()
+            conn.close()
+
+    def mark_thesis_alerted(self, thesis_id: int) -> None:
+        """Mark a thesis as alerted so it won't trigger duplicate alerts."""
+        conn = self._get_conn()
+        cursor = conn.cursor()
+        try:
+            cursor.execute(
+                "UPDATE theses SET alerted = TRUE WHERE id = %s",
+                (thesis_id,),
+            )
+            logger.debug("Marked thesis %s as alerted", thesis_id)
+        except Error as e:
+            logger.error("mark_thesis_alerted failed: %s", e)
+            raise
+        finally:
+            cursor.close()
+            conn.close()
 
     # ── User Preferences ──────────────────────────────────────────────
 

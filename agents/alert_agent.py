@@ -22,7 +22,6 @@ class AlertAgent:
         self._bot_token = os.getenv("TELEGRAM_BOT_TOKEN", "")
         self._chat_id = os.getenv("TELEGRAM_CHAT_ID", "")
         self._client = httpx.Client(timeout=30.0)
-        self._alerted_ids: set[int] = set()
 
     # ── Public ────────────────────────────────────────────────────────
 
@@ -35,12 +34,9 @@ class AlertAgent:
 
         for thesis in theses:
             thesis_id = thesis["id"]
-            if thesis_id in self._alerted_ids:
-                continue
-
             success = self._send_alert(thesis)
             if success:
-                self._alerted_ids.add(thesis_id)
+                self._db.mark_thesis_alerted(thesis_id)
                 new_alerts.append(thesis)
                 logger.info(
                     "AlertAgent: sent alert for thesis #%d — %s (%.0f%%)",
