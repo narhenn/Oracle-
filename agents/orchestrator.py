@@ -77,6 +77,10 @@ class OrchestratorAgent:
 
         stored = self._store_theses(raw_theses)
         logger.info("OrchestratorAgent: generated and stored %d theses", len(stored))
+
+        for thesis in stored:
+            self.generate_next_queries(thesis)
+
         return stored
 
     def query(self, user_question: str, user_telegram_id: Optional[str] = None) -> str:
@@ -219,6 +223,58 @@ class OrchestratorAgent:
                 logger.error("Failed to store thesis for %s: %s", company, e)
 
         return stored
+
+    # ── Self-Directing Queries ────────────────────────────────────────
+
+    def generate_next_queries(self, thesis: dict) -> list[str]:
+        """Ask Agnes-Claw for follow-up search queries to confirm or challenge a thesis."""
+        thesis_id = thesis["id"]
+        thesis_text = thesis["thesis_text"]
+
+        prompt = (
+            f"You just generated this thesis: {thesis_text}\n\n"
+            "Based on this, what are 3 follow-up search queries that would "
+            "find MORE specific signals to either confirm or challenge this thesis?\n"
+            "Return ONLY a JSON array of 3 search query strings."
+        )
+
+        raw = self._call_agnes_raw(
+            "You are a research query generator. Return ONLY a JSON array of 3 search query strings. No other text.",
+            prompt,
+        )
+        if not raw:
+            return []
+
+        try:
+            json_str = raw
+            if "```json" in json_str:
+                json_str = json_str.split("```json")[1].split("```")[0]
+            elif "```" in json_str:
+                json_str = json_str.split("```")[1].split("```")[0]
+
+            queries = json.loads(json_str.strip())
+            if not isinstance(queries, list):
+                return []
+        except (json.JSONDecodeError, IndexError) as e:
+            logger.error("Failed to parse follow-up queries: %s", e)
+            return []
+
+        stored_queries: list[str] = []
+        for q in queries[:3]:
+            if not isinstance(q, str) or not q.strip():
+                continue
+            try:
+                self._db.insert_generated_query(q.strip(), thesis_id)
+                stored_queries.append(q.strip())
+            except Exception as e:
+                logger.error("Failed to store generated query: %s", e)
+
+        logger.info(
+            "OrchestratorAgent: generated %d follow-up queries for thesis #%d",
+            len(stored_queries),
+            thesis_id,
+        )
+        return stored_queries
 
     def close(self) -> None:
         self._client.close()

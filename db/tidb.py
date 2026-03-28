@@ -86,6 +86,17 @@ class TiDBClient:
                 )
             """)
             cursor.execute("""
+                CREATE TABLE IF NOT EXISTS generated_queries (
+                    id               INT AUTO_INCREMENT PRIMARY KEY,
+                    query_text       TEXT NOT NULL,
+                    source_thesis_id INT NOT NULL,
+                    used             BOOLEAN DEFAULT FALSE,
+                    created_at       DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    INDEX idx_source_thesis (source_thesis_id),
+                    INDEX idx_used (used)
+                )
+            """)
+            cursor.execute("""
                 CREATE TABLE IF NOT EXISTS user_preferences (
                     id               INT AUTO_INCREMENT PRIMARY KEY,
                     user_telegram_id VARCHAR(100) NOT NULL,
@@ -268,6 +279,65 @@ class TiDBClient:
             logger.debug("Marked thesis %s as alerted", thesis_id)
         except Error as e:
             logger.error("mark_thesis_alerted failed: %s", e)
+            raise
+        finally:
+            cursor.close()
+            conn.close()
+
+    # ── Generated Queries ─────────────────────────────────────────────
+
+    def insert_generated_query(self, query_text: str, source_thesis_id: int) -> int:
+        conn = self._get_conn()
+        cursor = conn.cursor()
+        try:
+            cursor.execute(
+                """
+                INSERT INTO generated_queries (query_text, source_thesis_id)
+                VALUES (%s, %s)
+                """,
+                (query_text, source_thesis_id),
+            )
+            query_id = cursor.lastrowid
+            logger.debug("Inserted generated query %s for thesis %s", query_id, source_thesis_id)
+            return query_id
+        except Error as e:
+            logger.error("insert_generated_query failed: %s", e)
+            raise
+        finally:
+            cursor.close()
+            conn.close()
+
+    def get_unused_queries(self, limit: int = 10) -> list[dict]:
+        conn = self._get_conn()
+        cursor = conn.cursor(dictionary=True)
+        try:
+            cursor.execute(
+                """
+                SELECT * FROM generated_queries
+                WHERE used = FALSE
+                ORDER BY created_at ASC LIMIT %s
+                """,
+                (limit,),
+            )
+            return cursor.fetchall()
+        except Error as e:
+            logger.error("get_unused_queries failed: %s", e)
+            raise
+        finally:
+            cursor.close()
+            conn.close()
+
+    def mark_query_used(self, query_id: int) -> None:
+        conn = self._get_conn()
+        cursor = conn.cursor()
+        try:
+            cursor.execute(
+                "UPDATE generated_queries SET used = TRUE WHERE id = %s",
+                (query_id,),
+            )
+            logger.debug("Marked query %s as used", query_id)
+        except Error as e:
+            logger.error("mark_query_used failed: %s", e)
             raise
         finally:
             cursor.close()
