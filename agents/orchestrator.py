@@ -1,19 +1,22 @@
+from __future__ import annotations
+
 import os
 import json
 import logging
-from typing import Optional
+from typing import Optional, TYPE_CHECKING
 
 import httpx
 from dotenv import load_dotenv
-
-from __future__ import annotations
-
-from typing import TYPE_CHECKING
 
 from db.tidb import TiDBClient
 
 if TYPE_CHECKING:
     from agents.alert_agent import AlertAgent
+    from agents.query_evolution_agent import QueryEvolutionAgent
+    from agents.contradiction_agent import ContradictionAgent
+    from agents.alert_decision_agent import AlertDecisionAgent
+    from agents.thesis_state_machine import ThesisStateMachine
+    from agents.entity_heat_tracker import EntityHeatTracker
 
 load_dotenv()
 
@@ -29,13 +32,18 @@ Your job:
 3. Generate an investment thesis with a confidence score (0-100)
 4. Higher confidence when multiple independent signals corroborate each other
 5. Always cite which signal IDs you used as evidence
+6. Estimate evidence_strength (0-100) and source_diversity (0-100)
+7. Estimate urgency (0-100) — how time-sensitive is this opportunity?
 
 Output STRICTLY as JSON array. Each element:
 {
     "company": "Company Name",
     "thesis": "Your investment thesis in 2-3 sentences",
     "confidence": 82,
-    "evidence_ids": [1, 4, 7]
+    "evidence_ids": [1, 4, 7],
+    "evidence_strength": 75,
+    "source_diversity": 60,
+    "urgency": 50
 }
 
 Rules:
@@ -59,17 +67,31 @@ If the signals don't contain enough information to answer, say so honestly.
 class OrchestratorAgent:
     """Cross-references signals via Agnes-Claw LLM to generate investment theses."""
 
-    def __init__(self, db: TiDBClient, alert_agent: AlertAgent | None = None) -> None:
+    def __init__(
+        self,
+        db: TiDBClient,
+        alert_agent: AlertAgent | None = None,
+        query_evolution: QueryEvolutionAgent | None = None,
+        contradiction_agent: ContradictionAgent | None = None,
+        alert_decision: AlertDecisionAgent | None = None,
+        state_machine: ThesisStateMachine | None = None,
+        heat_tracker: EntityHeatTracker | None = None,
+    ) -> None:
         self._db = db
         self._alert_agent = alert_agent
+        self._query_evolution = query_evolution
+        self._contradiction_agent = contradiction_agent
+        self._alert_decision = alert_decision
+        self._state_machine = state_machine
+        self._heat_tracker = heat_tracker
         self._api_key = os.getenv("AGNES_API_KEY", "")
         self._client = httpx.Client(timeout=120.0)
 
     # ── Public ────────────────────────────────────────────────────────
 
     def run(self, hours: int = 24) -> list[dict]:
-        """Analyse recent signals and generate theses. Returns stored theses."""
-        logger.info("OrchestratorAgent: starting analysis cycle (last %dh)", hours)
+        """Full analysis cycle with v2 agents."""
+        logger.info("OrchestratorAgent: starting v2 analysis cycle (last %dh)", hours)
 
         signals = self._db.get_recent_signals(hours=hours, limit=100)
         if not signals:
@@ -86,17 +108,37 @@ class OrchestratorAgent:
         stored = self._store_theses(raw_theses)
         logger.info("OrchestratorAgent: generated and stored %d theses", len(stored))
 
+        # v2: QueryEvolutionAgent replaces simple generate_next_queries
         for thesis in stored:
-            self.generate_next_queries(thesis)
-            if self._alert_agent and thesis.get("confidence", 0) >= 90:
-                self._alert_agent.post_to_channel(thesis)
+            if self._query_evolution:
+                self._query_evolution.run(thesis)
+            else:
+                self._generate_next_queries_v1(thesis)
 
-        self.detect_contradictions()
+        # v2: ContradictionAgent with active downgrade
+        if self._contradiction_agent:
+            self._contradiction_agent.run()
+
+        # v2: ThesisStateMachine — evaluate all thesis states
+        if self._state_machine:
+            self._state_machine.run_all()
+
+        # v2: EntityHeatTracker
+        if self._heat_tracker:
+            self._heat_tracker.run()
+
+        # v2: AlertDecisionAgent with full formula
+        if self._alert_decision:
+            self._alert_decision.run()
+        elif self._alert_agent:
+            # Fallback: v1 channel post for 90%+ theses
+            for thesis in stored:
+                if thesis.get("confidence", 0) >= 90:
+                    self._alert_agent.post_to_channel(thesis)
 
         return stored
 
     def query(self, user_question: str, user_telegram_id: Optional[str] = None) -> str:
-        """Answer a natural language question using stored signals."""
         logger.info("OrchestratorAgent: processing query — %s", user_question[:80])
 
         signals = self._db.get_recent_signals(hours=72, limit=100)
@@ -123,30 +165,22 @@ class OrchestratorAgent:
     # ── Agnes-Claw LLM ───────────────────────────────────────────────
 
     def _call_agnes(self, system_prompt: str, user_message: str) -> list[dict]:
-        """Call Agnes-Claw and parse JSON array response."""
         raw = self._call_agnes_raw(system_prompt, user_message)
         if not raw:
             return []
-
         try:
-            # Extract JSON from response (handle markdown code blocks)
             json_str = raw
             if "```json" in json_str:
                 json_str = json_str.split("```json")[1].split("```")[0]
             elif "```" in json_str:
                 json_str = json_str.split("```")[1].split("```")[0]
-
             parsed = json.loads(json_str.strip())
-            if isinstance(parsed, list):
-                return parsed
-            logger.warning("Agnes returned non-array JSON: %s", type(parsed))
-            return []
+            return parsed if isinstance(parsed, list) else []
         except (json.JSONDecodeError, IndexError) as e:
             logger.error("Failed to parse Agnes response: %s — raw: %s", e, raw[:200])
             return []
 
     def _call_agnes_raw(self, system_prompt: str, user_message: str) -> Optional[str]:
-        """Call Agnes-Claw API and return raw text response."""
         headers = {
             "Authorization": f"Bearer {self._api_key}",
             "Content-Type": "application/json",
@@ -160,12 +194,10 @@ class OrchestratorAgent:
             "temperature": 0.3,
             "max_tokens": 4096,
         }
-
         try:
             response = self._client.post(AGNES_API_URL, headers=headers, json=payload)
             response.raise_for_status()
-            data = response.json()
-            return data["choices"][0]["message"]["content"]
+            return response.json()["choices"][0]["message"]["content"]
         except httpx.HTTPStatusError as e:
             logger.error("Agnes API HTTP error: %d — %s", e.response.status_code, e.response.text[:200])
             return None
@@ -179,23 +211,20 @@ class OrchestratorAgent:
     # ── Formatting ────────────────────────────────────────────────────
 
     def _format_signals(self, signals: list[dict]) -> str:
-        """Format signals into readable text for the LLM."""
         lines: list[str] = []
         for s in signals:
-            ts = s.get("timestamp", "")
             lines.append(
                 f"[Signal #{s['id']}] ({s['source']}) {s['company']} — "
-                f"{s['signal_type']} — {s['signal_text'][:300]} "
-                f"[{ts}]"
+                f"{s['signal_type']} — {s['signal_text'][:300]} [{s.get('timestamp', '')}]"
             )
         return "\n".join(lines)
 
     def _format_theses(self, theses: list[dict]) -> str:
-        """Format existing theses for context."""
         lines: list[str] = []
         for t in theses:
+            state = t.get("thesis_state", "candidate")
             lines.append(
-                f"[Thesis #{t['id']}] {t['company']} (confidence: {t['confidence']}%) — "
+                f"[Thesis #{t['id']}] {t['company']} (state: {state}, confidence: {t['confidence']}%) — "
                 f"{t['thesis_text'][:300]}"
             )
         return "\n".join(lines)
@@ -203,19 +232,29 @@ class OrchestratorAgent:
     # ── Storage ───────────────────────────────────────────────────────
 
     def _store_theses(self, raw_theses: list[dict]) -> list[dict]:
-        """Validate and store theses in TiDB."""
         stored: list[dict] = []
         for thesis in raw_theses:
             company = thesis.get("company", "")
             thesis_text = thesis.get("thesis", "")
             confidence = thesis.get("confidence", 0)
             evidence_ids = thesis.get("evidence_ids", [])
+            evidence_strength = thesis.get("evidence_strength", 0)
+            source_diversity = thesis.get("source_diversity", 0)
+            urgency = thesis.get("urgency", 0)
 
             if not company or not thesis_text:
-                logger.warning("Skipping thesis with missing company/text")
                 continue
             if not isinstance(confidence, (int, float)) or confidence < 30:
                 continue
+
+            # Determine initial state via state machine
+            evidence_count = len(evidence_ids) if isinstance(evidence_ids, list) else 0
+            if self._state_machine:
+                initial_state = self._state_machine.compute_thesis_state_for_new(
+                    confidence, evidence_count, source_diversity
+                )
+            else:
+                initial_state = "candidate"
 
             try:
                 thesis_id = self._db.insert_thesis(
@@ -223,6 +262,10 @@ class OrchestratorAgent:
                     thesis_text=thesis_text,
                     confidence=float(confidence),
                     evidence_ids=evidence_ids,
+                    thesis_state=initial_state,
+                    urgency_score=float(urgency),
+                    evidence_strength_score=float(evidence_strength),
+                    source_diversity_score=float(source_diversity),
                 )
                 stored.append({
                     "id": thesis_id,
@@ -230,122 +273,49 @@ class OrchestratorAgent:
                     "thesis_text": thesis_text,
                     "confidence": confidence,
                     "evidence_ids": evidence_ids,
+                    "thesis_state": initial_state,
+                    "urgency_score": urgency,
+                    "evidence_strength_score": evidence_strength,
+                    "source_diversity_score": source_diversity,
                 })
             except Exception as e:
                 logger.error("Failed to store thesis for %s: %s", company, e)
 
         return stored
 
-    # ── Self-Directing Queries ────────────────────────────────────────
+    # ── v1 fallback query generator ───────────────────────────────────
 
-    def generate_next_queries(self, thesis: dict) -> list[str]:
-        """Ask Agnes-Claw for follow-up search queries to confirm or challenge a thesis."""
+    def _generate_next_queries_v1(self, thesis: dict) -> list[str]:
         thesis_id = thesis["id"]
-        thesis_text = thesis["thesis_text"]
-
         prompt = (
-            f"You just generated this thesis: {thesis_text}\n\n"
-            "Based on this, what are 3 follow-up search queries that would "
-            "find MORE specific signals to either confirm or challenge this thesis?\n"
+            f"You just generated this thesis: {thesis['thesis_text']}\n\n"
+            "What are 3 follow-up search queries to confirm or challenge this thesis?\n"
             "Return ONLY a JSON array of 3 search query strings."
         )
-
         raw = self._call_agnes_raw(
-            "You are a research query generator. Return ONLY a JSON array of 3 search query strings. No other text.",
-            prompt,
+            "Return ONLY a JSON array of 3 search query strings.", prompt
         )
         if not raw:
             return []
-
         try:
             json_str = raw
             if "```json" in json_str:
                 json_str = json_str.split("```json")[1].split("```")[0]
             elif "```" in json_str:
                 json_str = json_str.split("```")[1].split("```")[0]
-
             queries = json.loads(json_str.strip())
             if not isinstance(queries, list):
                 return []
-        except (json.JSONDecodeError, IndexError) as e:
-            logger.error("Failed to parse follow-up queries: %s", e)
+        except (json.JSONDecodeError, IndexError):
             return []
-
-        stored_queries: list[str] = []
+        stored = []
         for q in queries[:3]:
-            if not isinstance(q, str) or not q.strip():
-                continue
-            try:
-                self._db.insert_generated_query(q.strip(), thesis_id)
-                stored_queries.append(q.strip())
-            except Exception as e:
-                logger.error("Failed to store generated query: %s", e)
-
-        logger.info(
-            "OrchestratorAgent: generated %d follow-up queries for thesis #%d",
-            len(stored_queries),
-            thesis_id,
-        )
-        return stored_queries
-
-    # ── Contradiction Detection ──────────────────────────────────────
-
-    def detect_contradictions(self) -> list[dict]:
-        """Scan recent theses for contradictions via Agnes-Claw."""
-        theses = self._db.get_theses_since_days(days=7)
-        if len(theses) <= 2:
-            logger.debug("OrchestratorAgent: not enough theses for contradiction check")
-            return []
-
-        theses_text = "\n".join(
-            f"[Thesis #{t['id']}] {t['company']} (confidence: {t['confidence']}%): {t['thesis_text']}"
-            for t in theses
-        )
-
-        prompt = (
-            "You are a critical analyst. Review these investment theses about "
-            f"Singapore companies:\n\n{theses_text}\n\n"
-            "Identify any contradictions or conflicts between them. "
-            "For example: one thesis says sector is growing, another says contracting.\n\n"
-            "Return ONLY a JSON array of objects:\n"
-            '[{"thesis_a_id": int, "thesis_b_id": int, "contradiction": "one sentence", '
-            '"severity": "high/medium/low"}]\n'
-            "Return empty array [] if no contradictions found."
-        )
-
-        raw_contradictions = self._call_agnes(
-            "You are a critical analyst. Return ONLY valid JSON. No other text.",
-            prompt,
-        )
-
-        if not raw_contradictions:
-            logger.info("OrchestratorAgent: no contradictions detected")
-            return []
-
-        valid_ids = {t["id"] for t in theses}
-        stored: list[dict] = []
-
-        for c in raw_contradictions:
-            a_id = c.get("thesis_a_id")
-            b_id = c.get("thesis_b_id")
-            text = c.get("contradiction", "")
-            severity = c.get("severity", "low")
-
-            if a_id not in valid_ids or b_id not in valid_ids:
-                continue
-            if not text:
-                continue
-            if severity not in ("high", "medium", "low"):
-                severity = "low"
-
-            try:
-                cid = self._db.insert_contradiction(a_id, b_id, text, severity)
-                stored.append({"id": cid, "thesis_a_id": a_id, "thesis_b_id": b_id,
-                               "contradiction": text, "severity": severity})
-            except Exception as e:
-                logger.error("Failed to store contradiction: %s", e)
-
-        logger.info("OrchestratorAgent: detected and stored %d contradictions", len(stored))
+            if isinstance(q, str) and q.strip():
+                try:
+                    self._db.insert_generated_query(q.strip(), thesis_id)
+                    stored.append(q.strip())
+                except Exception:
+                    pass
         return stored
 
     def close(self) -> None:

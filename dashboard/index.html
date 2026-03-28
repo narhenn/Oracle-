@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Oracle — Singapore Market Intelligence</title>
+    <title>Oracle v2 — Singapore Market Intelligence</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
@@ -20,181 +20,103 @@
             justify-content: space-between;
             align-items: center;
         }
-        .header h1 {
-            font-size: 24px;
-            font-weight: 700;
-            color: #fff;
-        }
+        .header h1 { font-size: 24px; font-weight: 700; color: #fff; }
         .header h1 span { color: #3b82f6; }
-        .status-bar {
-            display: flex;
-            gap: 24px;
-            font-size: 13px;
-            color: #94a3b8;
-        }
+        .header .v2-badge { font-size: 11px; background: #3b82f6; color: #fff; padding: 2px 8px; border-radius: 4px; margin-left: 8px; }
+        .status-bar { display: flex; gap: 24px; font-size: 13px; color: #94a3b8; }
         .status-bar .stat { display: flex; align-items: center; gap: 6px; }
-        .status-bar .dot {
-            width: 8px; height: 8px;
-            border-radius: 50%;
-            background: #22c55e;
-            animation: pulse 2s infinite;
-        }
-        @keyframes pulse {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.4; }
-        }
+        .status-bar .dot { width: 8px; height: 8px; border-radius: 50%; background: #22c55e; animation: pulse 2s infinite; }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
         .container { max-width: 1400px; margin: 0 auto; padding: 24px 32px; }
-        .stats-grid {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 16px;
-            margin-bottom: 32px;
-        }
-        .stat-card {
-            background: #111827;
-            border: 1px solid #1e2a3a;
-            border-radius: 12px;
-            padding: 20px;
-        }
+        .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 32px; }
+        .stat-card { background: #111827; border: 1px solid #1e2a3a; border-radius: 12px; padding: 20px; }
         .stat-card .label { font-size: 13px; color: #64748b; margin-bottom: 4px; }
         .stat-card .value { font-size: 32px; font-weight: 700; color: #fff; }
         .stat-card .value.blue { color: #3b82f6; }
         .stat-card .value.amber { color: #f59e0b; }
         .stat-card .value.green { color: #22c55e; }
+        .stat-card .value.red { color: #ef4444; }
         .section { margin-bottom: 32px; }
-        .section-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 16px;
-        }
+        .section-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
         .section-header h2 { font-size: 18px; font-weight: 600; }
-        .section-header .badge {
-            font-size: 12px;
-            padding: 4px 10px;
-            border-radius: 20px;
-            background: #1e293b;
-            color: #94a3b8;
-        }
-        .thesis-card {
-            background: #111827;
-            border: 1px solid #1e2a3a;
-            border-radius: 12px;
-            padding: 20px;
-            margin-bottom: 12px;
-            transition: border-color 0.2s;
-        }
+        .section-header .badge { font-size: 12px; padding: 4px 10px; border-radius: 20px; background: #1e293b; color: #94a3b8; }
+        .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-bottom: 32px; }
+        @media (max-width: 900px) { .two-col { grid-template-columns: 1fr; } .stats-grid { grid-template-columns: repeat(2, 1fr); } }
+
+        /* Thesis cards */
+        .thesis-card { background: #111827; border: 1px solid #1e2a3a; border-radius: 12px; padding: 20px; margin-bottom: 12px; transition: border-color 0.2s; }
         .thesis-card:hover { border-color: #3b82f6; }
-        .thesis-card .top {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 12px;
-        }
+        .thesis-card .top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
         .thesis-card .company { font-size: 16px; font-weight: 600; color: #fff; }
-        .confidence-badge {
-            font-size: 13px;
-            font-weight: 600;
-            padding: 4px 12px;
-            border-radius: 20px;
-        }
+        .thesis-card .badges { display: flex; gap: 6px; align-items: center; }
+        .confidence-badge { font-size: 13px; font-weight: 600; padding: 4px 12px; border-radius: 20px; }
         .conf-high { background: rgba(34,197,94,0.15); color: #22c55e; }
         .conf-med { background: rgba(245,158,11,0.15); color: #f59e0b; }
         .conf-low { background: rgba(100,116,139,0.15); color: #94a3b8; }
+        .state-badge { font-size: 10px; font-weight: 600; padding: 3px 8px; border-radius: 4px; text-transform: uppercase; letter-spacing: 0.5px; }
+        .state-candidate { background: rgba(100,116,139,0.15); color: #94a3b8; }
+        .state-emerging { background: rgba(59,130,246,0.15); color: #60a5fa; }
+        .state-developing { background: rgba(168,85,247,0.15); color: #c084fc; }
+        .state-strong { background: rgba(34,197,94,0.15); color: #4ade80; }
+        .state-actionable { background: rgba(34,197,94,0.3); color: #22c55e; border: 1px solid #22c55e; }
+        .state-conflicted { background: rgba(239,68,68,0.15); color: #f87171; }
+        .state-stale { background: rgba(100,116,139,0.1); color: #64748b; }
         .thesis-card .text { font-size: 14px; line-height: 1.6; color: #cbd5e1; margin-bottom: 8px; }
         .thesis-card .meta { font-size: 12px; color: #475569; }
-        .confidence-bar {
-            width: 100%;
-            height: 4px;
-            background: #1e293b;
-            border-radius: 2px;
-            margin-top: 12px;
-            overflow: hidden;
-        }
-        .confidence-bar .fill {
-            height: 100%;
-            border-radius: 2px;
-            transition: width 0.6s ease;
-        }
-        .signal-table {
-            width: 100%;
-            border-collapse: collapse;
-        }
-        .signal-table th {
-            text-align: left;
-            font-size: 12px;
-            font-weight: 500;
-            color: #64748b;
-            padding: 10px 12px;
-            border-bottom: 1px solid #1e2a3a;
-        }
-        .signal-table td {
-            font-size: 13px;
-            padding: 12px;
-            border-bottom: 1px solid #111827;
-            color: #cbd5e1;
-        }
+        .thesis-card .scores { display: flex; gap: 12px; margin-top: 8px; font-size: 11px; color: #64748b; }
+        .thesis-card .scores span { display: flex; align-items: center; gap: 3px; }
+        .confidence-bar { width: 100%; height: 4px; background: #1e293b; border-radius: 2px; margin-top: 12px; overflow: hidden; }
+        .confidence-bar .fill { height: 100%; border-radius: 2px; transition: width 0.6s ease; }
+
+        /* Entity heat */
+        .heat-card { background: #111827; border: 1px solid #1e2a3a; border-radius: 12px; padding: 16px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; }
+        .heat-card .left { display: flex; align-items: center; gap: 12px; }
+        .heat-card .rank { font-size: 20px; font-weight: 700; color: #334155; width: 28px; }
+        .heat-card .name { font-size: 15px; font-weight: 600; color: #fff; }
+        .heat-card .heat-bar { width: 120px; height: 6px; background: #1e293b; border-radius: 3px; overflow: hidden; }
+        .heat-card .heat-bar .fill { height: 100%; border-radius: 3px; }
+        .heat-card .heat-val { font-size: 14px; font-weight: 600; min-width: 40px; text-align: right; }
+
+        /* State distribution */
+        .state-dist { display: flex; gap: 8px; flex-wrap: wrap; }
+        .state-chip { font-size: 12px; padding: 6px 12px; border-radius: 8px; background: #1e293b; display: flex; align-items: center; gap: 6px; }
+        .state-chip .count { font-weight: 700; color: #fff; }
+
+        /* Contradictions */
+        .contradiction-card { background: #111827; border-radius: 12px; padding: 20px; margin-bottom: 12px; }
+        .contradiction-card.sev-hard { border: 1px solid #ef4444; }
+        .contradiction-card.sev-soft { border: 1px solid #f59e0b; }
+        .contradiction-card.sev-outdated, .contradiction-card.sev-low, .contradiction-card.sev-medium { border: 1px solid #475569; }
+        .sev-badge { font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 4px; text-transform: uppercase; }
+        .sev-badge.hard, .sev-badge.high { background: rgba(239,68,68,0.15); color: #ef4444; }
+        .sev-badge.soft, .sev-badge.medium { background: rgba(245,158,11,0.15); color: #f59e0b; }
+        .sev-badge.outdated, .sev-badge.low { background: rgba(100,116,139,0.15); color: #94a3b8; }
+        .contradiction-card .pair { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; font-size: 13px; color: #94a3b8; }
+        .contradiction-card .pair .name { color: #fff; font-weight: 500; }
+        .contradiction-card .desc { font-size: 14px; line-height: 1.6; color: #cbd5e1; }
+
+        /* Signals table */
+        .signal-table { width: 100%; border-collapse: collapse; }
+        .signal-table th { text-align: left; font-size: 12px; font-weight: 500; color: #64748b; padding: 10px 12px; border-bottom: 1px solid #1e2a3a; }
+        .signal-table td { font-size: 13px; padding: 12px; border-bottom: 1px solid #111827; color: #cbd5e1; }
         .signal-table tr:hover td { background: #0f1724; }
-        .type-tag {
-            font-size: 11px;
-            padding: 2px 8px;
-            border-radius: 4px;
-            font-weight: 500;
-        }
+        .type-tag { font-size: 11px; padding: 2px 8px; border-radius: 4px; font-weight: 500; }
         .type-funding { background: rgba(59,130,246,0.15); color: #60a5fa; }
         .type-acquisition { background: rgba(168,85,247,0.15); color: #c084fc; }
         .type-launch { background: rgba(34,197,94,0.15); color: #4ade80; }
         .type-hiring { background: rgba(245,158,11,0.15); color: #fbbf24; }
         .type-expansion { background: rgba(236,72,153,0.15); color: #f472b6; }
         .type-general { background: rgba(100,116,139,0.15); color: #94a3b8; }
-        .refresh-btn {
-            background: #1e293b;
-            border: 1px solid #334155;
-            color: #94a3b8;
-            padding: 6px 14px;
-            border-radius: 8px;
-            cursor: pointer;
-            font-size: 13px;
-            transition: all 0.2s;
-        }
+
+        .refresh-btn { background: #1e293b; border: 1px solid #334155; color: #94a3b8; padding: 6px 14px; border-radius: 8px; cursor: pointer; font-size: 13px; transition: all 0.2s; }
         .refresh-btn:hover { background: #334155; color: #fff; }
-        .contradiction-card {
-            background: #111827;
-            border-radius: 12px;
-            padding: 20px;
-            margin-bottom: 12px;
-            transition: border-color 0.2s;
-        }
-        .contradiction-card.sev-high { border: 1px solid #ef4444; }
-        .contradiction-card.sev-medium { border: 1px solid #f59e0b; }
-        .contradiction-card.sev-low { border: 1px solid #475569; }
-        .contradiction-card .sev-badge {
-            font-size: 11px;
-            font-weight: 600;
-            padding: 2px 8px;
-            border-radius: 4px;
-            text-transform: uppercase;
-        }
-        .sev-badge.high { background: rgba(239,68,68,0.15); color: #ef4444; }
-        .sev-badge.medium { background: rgba(245,158,11,0.15); color: #f59e0b; }
-        .sev-badge.low { background: rgba(100,116,139,0.15); color: #94a3b8; }
-        .contradiction-card .pair {
-            display: flex;
-            gap: 8px;
-            align-items: center;
-            margin-bottom: 8px;
-            font-size: 13px;
-            color: #94a3b8;
-        }
-        .contradiction-card .pair .name { color: #fff; font-weight: 500; }
-        .contradiction-card .desc { font-size: 14px; line-height: 1.6; color: #cbd5e1; }
         .empty { text-align: center; padding: 40px; color: #475569; font-size: 14px; }
         .loading { text-align: center; padding: 40px; color: #64748b; }
     </style>
 </head>
 <body>
     <div class="header">
-        <h1><span>Oracle</span> — Singapore Market Intelligence</h1>
+        <h1><span>Oracle</span> — Singapore Market Intelligence <span class="v2-badge">v2</span></h1>
         <div class="status-bar">
             <div class="stat"><div class="dot"></div> Live</div>
             <div class="stat" id="last-updated">Updated: —</div>
@@ -208,21 +130,40 @@
                 <div class="value blue" id="stat-signals">—</div>
             </div>
             <div class="stat-card">
-                <div class="label">Total Theses</div>
+                <div class="label">Active Theses</div>
                 <div class="value amber" id="stat-theses">—</div>
             </div>
             <div class="stat-card">
                 <div class="label">High Confidence</div>
                 <div class="value green" id="stat-high">—</div>
             </div>
+            <div class="stat-card">
+                <div class="label">Hottest Entity</div>
+                <div class="value red" id="stat-hottest" style="font-size:20px">—</div>
+            </div>
         </div>
 
+        <!-- Thesis State Distribution -->
         <div class="section">
-            <div class="section-header">
-                <h2>Investment Theses</h2>
-                <button class="refresh-btn" onclick="loadAll()">Refresh</button>
+            <div class="section-header"><h2>Thesis States</h2></div>
+            <div class="state-dist" id="state-dist"></div>
+        </div>
+
+        <div class="two-col">
+            <!-- Entity Heat -->
+            <div class="section">
+                <div class="section-header"><h2>Entity Heat Map</h2></div>
+                <div id="heat-container"><div class="loading">Loading heat map...</div></div>
             </div>
-            <div id="theses-container"><div class="loading">Loading theses...</div></div>
+
+            <!-- Theses -->
+            <div class="section">
+                <div class="section-header">
+                    <h2>Investment Theses</h2>
+                    <button class="refresh-btn" onclick="loadAll()">Refresh</button>
+                </div>
+                <div id="theses-container"><div class="loading">Loading theses...</div></div>
+            </div>
         </div>
 
         <div class="section" id="contradictions-section" style="display:none">
@@ -243,166 +184,149 @@
     </div>
 
     <script>
-        const API_BASE = window.location.origin;
+        const API = window.location.origin;
 
-        function confClass(c) {
-            if (c >= 75) return 'conf-high';
-            if (c >= 50) return 'conf-med';
-            return 'conf-low';
-        }
-
-        function confColor(c) {
-            if (c >= 75) return '#22c55e';
-            if (c >= 50) return '#f59e0b';
-            return '#64748b';
-        }
-
+        function confClass(c) { return c >= 75 ? 'conf-high' : c >= 50 ? 'conf-med' : 'conf-low'; }
+        function confColor(c) { return c >= 75 ? '#22c55e' : c >= 50 ? '#f59e0b' : '#64748b'; }
+        function heatColor(h) { return h >= 70 ? '#ef4444' : h >= 40 ? '#f59e0b' : '#3b82f6'; }
+        function stateClass(s) { return 'state-' + (s || 'candidate'); }
         function typeClass(t) {
-            const base = t.replace('hiring_', '');
-            const map = { funding: 'type-funding', acquisition: 'type-acquisition', launch: 'type-launch', expansion: 'type-expansion' };
             if (t.startsWith('hiring')) return 'type-hiring';
-            return map[base] || 'type-general';
+            const m = {funding:'type-funding',acquisition:'type-acquisition',launch:'type-launch',expansion:'type-expansion'};
+            return m[t.replace('hiring_','')] || 'type-general';
         }
-
         function timeAgo(iso) {
             if (!iso) return '';
-            const diff = Date.now() - new Date(iso).getTime();
-            const mins = Math.floor(diff / 60000);
-            if (mins < 60) return mins + 'm ago';
-            const hrs = Math.floor(mins / 60);
-            if (hrs < 24) return hrs + 'h ago';
-            return Math.floor(hrs / 24) + 'd ago';
+            const d = Date.now() - new Date(iso).getTime(), m = Math.floor(d/60000);
+            if (m < 60) return m+'m ago';
+            const h = Math.floor(m/60);
+            return h < 24 ? h+'h ago' : Math.floor(h/24)+'d ago';
         }
 
         async function loadStatus() {
             try {
-                const res = await fetch(API_BASE + '/api/status');
-                const data = await res.json();
-                document.getElementById('stat-signals').textContent = data.signals_24h;
-                document.getElementById('stat-theses').textContent = data.total_theses;
-                document.getElementById('stat-high').textContent = data.high_confidence;
+                const r = await fetch(API+'/api/status');
+                const d = await r.json();
+                document.getElementById('stat-signals').textContent = d.signals_24h;
+                document.getElementById('stat-theses').textContent = d.total_theses;
+                document.getElementById('stat-high').textContent = d.high_confidence;
+                if (d.hottest_entities && d.hottest_entities.length)
+                    document.getElementById('stat-hottest').textContent = d.hottest_entities[0].company + ' (' + (d.hottest_entities[0].heat||0).toFixed(0) + ')';
                 document.getElementById('last-updated').textContent = 'Updated: ' + new Date().toLocaleTimeString();
-            } catch (e) {
-                console.error('Status fetch failed', e);
-            }
+
+                // State distribution
+                if (d.active_states) {
+                    const dist = document.getElementById('state-dist');
+                    const colors = {candidate:'#94a3b8',emerging:'#60a5fa',developing:'#c084fc',strong:'#4ade80',actionable:'#22c55e',conflicted:'#f87171',stale:'#64748b'};
+                    dist.innerHTML = Object.entries(d.active_states).filter(([,v])=>v>0).map(([k,v])=>
+                        `<div class="state-chip"><span style="color:${colors[k]||'#94a3b8'}">${k}</span> <span class="count">${v}</span></div>`
+                    ).join('');
+                }
+            } catch(e) { console.error('Status fetch failed', e); }
+        }
+
+        async function loadHeat() {
+            const c = document.getElementById('heat-container');
+            try {
+                const r = await fetch(API+'/api/entity-heat?limit=10');
+                const d = await r.json();
+                const items = d.entities || [];
+                if (!items.length) { c.innerHTML = '<div class="empty">No entity heat data yet.</div>'; return; }
+                c.innerHTML = items.map((h,i) => `
+                    <div class="heat-card">
+                        <div class="left">
+                            <div class="rank">${i+1}</div>
+                            <div>
+                                <div class="name">${h.company}</div>
+                                <div style="font-size:11px;color:#64748b">vel: ${(h.signal_velocity||0).toFixed(1)}/day</div>
+                            </div>
+                        </div>
+                        <div style="display:flex;align-items:center;gap:12px">
+                            <div class="heat-bar"><div class="fill" style="width:${h.heat_score}%;background:${heatColor(h.heat_score)}"></div></div>
+                            <div class="heat-val" style="color:${heatColor(h.heat_score)}">${(h.heat_score||0).toFixed(0)}</div>
+                        </div>
+                    </div>
+                `).join('');
+            } catch(e) { c.innerHTML = '<div class="empty">Failed to load heat map.</div>'; }
         }
 
         async function loadTheses() {
-            const container = document.getElementById('theses-container');
+            const c = document.getElementById('theses-container');
             try {
-                const res = await fetch(API_BASE + '/api/theses?limit=10');
-                const data = await res.json();
-                const theses = data.theses || [];
-
-                if (theses.length === 0) {
-                    container.innerHTML = '<div class="empty">No theses generated yet. Agents are collecting signals.</div>';
-                    return;
-                }
-
-                container.innerHTML = theses.map(t => `
+                const r = await fetch(API+'/api/theses?limit=10');
+                const d = await r.json();
+                const theses = d.theses || [];
+                if (!theses.length) { c.innerHTML = '<div class="empty">No theses yet.</div>'; return; }
+                c.innerHTML = theses.map(t => `
                     <div class="thesis-card">
                         <div class="top">
                             <div class="company">${t.company}</div>
-                            <div class="confidence-badge ${confClass(t.confidence)}">${t.confidence.toFixed(0)}%</div>
+                            <div class="badges">
+                                <span class="state-badge ${stateClass(t.thesis_state)}">${t.thesis_state||'candidate'}</span>
+                                <span class="confidence-badge ${confClass(t.confidence)}">${t.confidence.toFixed(0)}%</span>
+                            </div>
                         </div>
                         <div class="text">${t.thesis_text}</div>
-                        <div class="meta">Evidence: signals ${t.evidence_ids || 'N/A'} &middot; ${timeAgo(t.timestamp)}</div>
-                        <div class="confidence-bar">
-                            <div class="fill" style="width:${t.confidence}%; background:${confColor(t.confidence)}"></div>
+                        <div class="scores">
+                            ${t.alert_score ? `<span>Alert: ${t.alert_score.toFixed(0)}</span>` : ''}
+                            ${t.urgency_score ? `<span>Urg: ${t.urgency_score.toFixed(0)}</span>` : ''}
+                            ${t.evidence_strength_score ? `<span>Evid: ${t.evidence_strength_score.toFixed(0)}</span>` : ''}
+                            ${t.source_diversity_score ? `<span>Div: ${t.source_diversity_score.toFixed(0)}</span>` : ''}
+                            ${t.contradiction_score ? `<span style="color:#f87171">Contr: ${t.contradiction_score.toFixed(0)}</span>` : ''}
                         </div>
+                        <div class="meta">Evidence: ${t.evidence_ids || 'N/A'} &middot; ${timeAgo(t.timestamp)}</div>
+                        <div class="confidence-bar"><div class="fill" style="width:${t.confidence}%;background:${confColor(t.confidence)}"></div></div>
                     </div>
                 `).join('');
-            } catch (e) {
-                container.innerHTML = '<div class="empty">Failed to load theses.</div>';
-            }
-        }
-
-        async function loadSignals() {
-            const container = document.getElementById('signals-container');
-            try {
-                const res = await fetch(API_BASE + '/api/signals?limit=25');
-                const data = await res.json();
-                const signals = data.signals || [];
-
-                document.getElementById('signal-count').textContent = signals.length + ' signals';
-
-                if (signals.length === 0) {
-                    container.innerHTML = '<div class="empty">No signals collected yet.</div>';
-                    return;
-                }
-
-                container.innerHTML = `
-                    <table class="signal-table">
-                        <thead>
-                            <tr>
-                                <th>ID</th>
-                                <th>Company</th>
-                                <th>Source</th>
-                                <th>Type</th>
-                                <th>Signal</th>
-                                <th>Time</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            ${signals.map(s => `
-                                <tr>
-                                    <td>#${s.id}</td>
-                                    <td style="color:#fff;font-weight:500">${s.company}</td>
-                                    <td>${s.source}</td>
-                                    <td><span class="type-tag ${typeClass(s.signal_type)}">${s.signal_type}</span></td>
-                                    <td>${(s.signal_text || '').substring(0, 120)}...</td>
-                                    <td style="white-space:nowrap">${timeAgo(s.timestamp)}</td>
-                                </tr>
-                            `).join('')}
-                        </tbody>
-                    </table>
-                `;
-            } catch (e) {
-                container.innerHTML = '<div class="empty">Failed to load signals.</div>';
-            }
+            } catch(e) { c.innerHTML = '<div class="empty">Failed to load theses.</div>'; }
         }
 
         async function loadContradictions() {
-            const section = document.getElementById('contradictions-section');
-            const container = document.getElementById('contradictions-container');
+            const sec = document.getElementById('contradictions-section');
+            const c = document.getElementById('contradictions-container');
             try {
-                const res = await fetch(API_BASE + '/api/contradictions?limit=10');
-                const data = await res.json();
-                const items = data.contradictions || [];
-
-                if (items.length === 0) {
-                    section.style.display = 'none';
-                    return;
-                }
-
-                section.style.display = 'block';
+                const r = await fetch(API+'/api/contradictions?limit=10');
+                const d = await r.json();
+                const items = d.contradictions || [];
+                if (!items.length) { sec.style.display = 'none'; return; }
+                sec.style.display = 'block';
                 document.getElementById('contradiction-count').textContent = items.length;
-
-                container.innerHTML = items.map(c => `
-                    <div class="contradiction-card sev-${c.severity}">
+                c.innerHTML = items.map(x => `
+                    <div class="contradiction-card sev-${x.severity}">
                         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
                             <div class="pair">
-                                <span class="name">${c.company_a || 'Thesis #'+c.thesis_a_id}</span>
+                                <span class="name">${x.company_a||'#'+x.thesis_a_id}</span>
                                 <span>vs</span>
-                                <span class="name">${c.company_b || 'Thesis #'+c.thesis_b_id}</span>
+                                <span class="name">${x.company_b||'#'+x.thesis_b_id}</span>
                             </div>
-                            <span class="sev-badge ${c.severity}">${c.severity}</span>
+                            <div style="display:flex;gap:6px">
+                                <span class="sev-badge ${x.severity}">${x.severity}</span>
+                                ${x.action_taken && x.action_taken!='none' ? `<span class="sev-badge" style="background:rgba(59,130,246,0.15);color:#60a5fa">${x.action_taken}</span>` : ''}
+                            </div>
                         </div>
-                        <div class="desc">${c.contradiction}</div>
+                        <div class="desc">${x.contradiction}</div>
                     </div>
                 `).join('');
-            } catch (e) {
-                section.style.display = 'none';
-            }
+            } catch(e) { sec.style.display = 'none'; }
         }
 
-        function loadAll() {
-            loadStatus();
-            loadTheses();
-            loadContradictions();
-            loadSignals();
+        async function loadSignals() {
+            const c = document.getElementById('signals-container');
+            try {
+                const r = await fetch(API+'/api/signals?limit=25');
+                const d = await r.json();
+                const sigs = d.signals || [];
+                document.getElementById('signal-count').textContent = sigs.length + ' signals';
+                if (!sigs.length) { c.innerHTML = '<div class="empty">No signals yet.</div>'; return; }
+                c.innerHTML = `<table class="signal-table"><thead><tr><th>ID</th><th>Company</th><th>Source</th><th>Type</th><th>Signal</th><th>Time</th></tr></thead><tbody>
+                    ${sigs.map(s=>`<tr><td>#${s.id}</td><td style="color:#fff;font-weight:500">${s.company}</td><td>${s.source}</td>
+                        <td><span class="type-tag ${typeClass(s.signal_type)}">${s.signal_type}</span></td>
+                        <td>${(s.signal_text||'').substring(0,120)}...</td><td style="white-space:nowrap">${timeAgo(s.timestamp)}</td></tr>`).join('')}
+                </tbody></table>`;
+            } catch(e) { c.innerHTML = '<div class="empty">Failed to load signals.</div>'; }
         }
 
+        function loadAll() { loadStatus(); loadHeat(); loadTheses(); loadContradictions(); loadSignals(); }
         loadAll();
         setInterval(loadAll, 30000);
     </script>
