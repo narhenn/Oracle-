@@ -97,6 +97,15 @@ class TiDBClient:
                 )
             """)
             cursor.execute("""
+                CREATE TABLE IF NOT EXISTS trigger_log (
+                    id              INT AUTO_INCREMENT PRIMARY KEY,
+                    trigger_reason  TEXT NOT NULL,
+                    signals_before  INT NOT NULL DEFAULT 0,
+                    signals_after   INT NOT NULL DEFAULT 0,
+                    triggered_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+            cursor.execute("""
                 CREATE TABLE IF NOT EXISTS user_preferences (
                     id               INT AUTO_INCREMENT PRIMARY KEY,
                     user_telegram_id VARCHAR(100) NOT NULL,
@@ -279,6 +288,50 @@ class TiDBClient:
             logger.debug("Marked thesis %s as alerted", thesis_id)
         except Error as e:
             logger.error("mark_thesis_alerted failed: %s", e)
+            raise
+        finally:
+            cursor.close()
+            conn.close()
+
+    # ── Trigger Engine ─────────────────────────────────────────────────
+
+    def get_signal_count_between_hours(self, hours_ago_start: int, hours_ago_end: int) -> int:
+        """Count signals between two hour offsets from now. E.g. (0,1) = last hour."""
+        conn = self._get_conn()
+        cursor = conn.cursor()
+        try:
+            cursor.execute(
+                """
+                SELECT COUNT(*) FROM signals
+                WHERE timestamp >= NOW() - INTERVAL %s HOUR
+                  AND timestamp < NOW() - INTERVAL %s HOUR
+                """,
+                (hours_ago_end, hours_ago_start),
+            )
+            return cursor.fetchone()[0]
+        except Error as e:
+            logger.error("get_signal_count_between_hours failed: %s", e)
+            raise
+        finally:
+            cursor.close()
+            conn.close()
+
+    def insert_trigger_log(self, trigger_reason: str, signals_before: int, signals_after: int) -> int:
+        conn = self._get_conn()
+        cursor = conn.cursor()
+        try:
+            cursor.execute(
+                """
+                INSERT INTO trigger_log (trigger_reason, signals_before, signals_after)
+                VALUES (%s, %s, %s)
+                """,
+                (trigger_reason, signals_before, signals_after),
+            )
+            log_id = cursor.lastrowid
+            logger.debug("Inserted trigger log %s: %s", log_id, trigger_reason)
+            return log_id
+        except Error as e:
+            logger.error("insert_trigger_log failed: %s", e)
             raise
         finally:
             cursor.close()

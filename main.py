@@ -15,6 +15,7 @@ from agents.news_agent import NewsAgent
 from agents.jobs_agent import JobsAgent
 from agents.orchestrator import OrchestratorAgent
 from agents.alert_agent import AlertAgent
+from agents.trigger_engine import AdaptiveTriggerEngine
 from bot.telegram_bot import OracleBot
 
 load_dotenv()
@@ -32,6 +33,7 @@ news_agent = NewsAgent(db)
 jobs_agent = JobsAgent(db)
 orchestrator = OrchestratorAgent(db)
 alert_agent = AlertAgent(db)
+trigger_engine = AdaptiveTriggerEngine(db, news_agent, orchestrator, alert_agent)
 bot = OracleBot(db, orchestrator)
 
 scheduler = AsyncIOScheduler()
@@ -71,6 +73,14 @@ def job_alert() -> None:
         logger.error("Scheduled alert check failed: %s", e)
 
 
+def job_pulse() -> None:
+    logger.info("Scheduled: market pulse check")
+    try:
+        trigger_engine.check_pulse()
+    except Exception as e:
+        logger.error("Scheduled pulse check failed: %s", e)
+
+
 # ── FastAPI lifecycle ─────────────────────────────────────────────────
 
 @asynccontextmanager
@@ -93,8 +103,9 @@ async def lifespan(app: FastAPI):
     scheduler.add_job(job_scrape_jobs, "interval", hours=2, next_run_time=datetime.now())
     scheduler.add_job(job_analyse, "interval", minutes=45, next_run_time=datetime.now())
     scheduler.add_job(job_alert, "interval", minutes=5, next_run_time=datetime.now())
+    scheduler.add_job(job_pulse, "interval", minutes=2)
     scheduler.start()
-    logger.info("Scheduler started — 4 jobs registered")
+    logger.info("Scheduler started — 5 jobs registered")
 
     yield
 
@@ -108,6 +119,7 @@ async def lifespan(app: FastAPI):
     jobs_agent.close()
     orchestrator.close()
     alert_agent.close()
+    trigger_engine.close()
 
 
 app = FastAPI(title="Oracle", version="1.0.0", lifespan=lifespan)
