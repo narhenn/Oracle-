@@ -444,24 +444,25 @@ class TiDBClient:
         self._upgrade_theses_table()
 
     def _upgrade_theses_table(self) -> None:
-        """Add v2 columns to existing theses table (idempotent)."""
+        """Add v2 columns to existing tables (idempotent)."""
         new_columns = [
-            ("thesis_state", "VARCHAR(20) DEFAULT 'candidate'"),
-            ("urgency_score", "FLOAT DEFAULT 0.0"),
-            ("user_relevance_score", "FLOAT DEFAULT 0.0"),
-            ("contradiction_score", "FLOAT DEFAULT 0.0"),
-            ("evidence_strength_score", "FLOAT DEFAULT 0.0"),
-            ("source_diversity_score", "FLOAT DEFAULT 0.0"),
-            ("alert_score", "FLOAT DEFAULT 0.0"),
-            ("alert_status", "VARCHAR(20) DEFAULT 'none'"),
+            ("theses", "thesis_state", "VARCHAR(20) DEFAULT 'candidate'"),
+            ("theses", "urgency_score", "FLOAT DEFAULT 0.0"),
+            ("theses", "user_relevance_score", "FLOAT DEFAULT 0.0"),
+            ("theses", "contradiction_score", "FLOAT DEFAULT 0.0"),
+            ("theses", "evidence_strength_score", "FLOAT DEFAULT 0.0"),
+            ("theses", "source_diversity_score", "FLOAT DEFAULT 0.0"),
+            ("theses", "alert_score", "FLOAT DEFAULT 0.0"),
+            ("theses", "alert_status", "VARCHAR(20) DEFAULT 'none'"),
+            ("contradictions", "action_taken", "VARCHAR(50) DEFAULT 'none'"),
         ]
         conn = self._get_conn()
         cursor = conn.cursor()
         try:
-            for col_name, col_def in new_columns:
+            for table, col_name, col_def in new_columns:
                 try:
-                    cursor.execute(f"ALTER TABLE theses ADD COLUMN {col_name} {col_def}")
-                    logger.debug("Added column %s to theses", col_name)
+                    cursor.execute(f"ALTER TABLE {table} ADD COLUMN {col_name} {col_def}")
+                    logger.debug("Added column %s to %s", col_name, table)
                 except Error:
                     pass  # column already exists
         finally:
@@ -663,10 +664,13 @@ class TiDBClient:
             cursor.execute("SELECT thesis_text, thesis_state, confidence FROM theses WHERE id = %s", (thesis_id,))
             row = cursor.fetchone()
             if row:
+                # Pre-calculate next version number (TiDB can't self-reference in INSERT subquery)
+                cursor.execute("SELECT COALESCE(MAX(version_number),0)+1 FROM thesis_versions WHERE thesis_id=%s", (thesis_id,))
+                next_version = cursor.fetchone()[0]
                 cursor.execute(
                     """INSERT INTO thesis_versions (thesis_id, version_number, thesis_statement, thesis_state, confidence_score, change_reason, generated_by_agent)
-                       VALUES (%s, (SELECT COALESCE(MAX(v.version_number),0)+1 FROM thesis_versions v WHERE v.thesis_id=%s), %s, %s, %s, %s, %s)""",
-                    (thesis_id, thesis_id, row[0], row[1], row[2], reason, agent),
+                       VALUES (%s, %s, %s, %s, %s, %s, %s)""",
+                    (thesis_id, next_version, row[0], row[1], row[2], reason, agent),
                 )
             cursor.execute("UPDATE theses SET thesis_state = %s WHERE id = %s", (new_state, thesis_id))
             logger.debug("Thesis %s state → %s (%s)", thesis_id, new_state, reason)

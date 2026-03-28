@@ -35,7 +35,7 @@ class AlertAgent:
 
         for thesis in theses:
             thesis_id = thesis["id"]
-            success = self._send_alert(thesis)
+            success = self.send_alert(thesis)
             if success:
                 self._db.mark_thesis_alerted(thesis_id)
                 new_alerts.append(thesis)
@@ -53,7 +53,7 @@ class AlertAgent:
 
     # ── Telegram Messaging ────────────────────────────────────────────
 
-    def _send_alert(self, thesis: dict) -> bool:
+    def send_alert(self, thesis: dict) -> bool:
         """Send a formatted Telegram alert for a high-confidence thesis."""
         message = self._format_alert(thesis)
         return self._send_telegram_message(message)

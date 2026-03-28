@@ -136,7 +136,7 @@ class AlertDecisionAgent:
             self._db.update_thesis_scores(thesis_id, alert_status="digest")
 
         elif action == "telegram_alert":
-            success = self._alert_agent._send_alert(thesis)
+            success = self._alert_agent.send_alert(thesis)
             if success:
                 self._db.insert_alert(thesis_id, "telegram", score, confidence, "telegram")
                 self._db.update_thesis_scores(thesis_id, alert_status="alerted")
@@ -150,5 +150,5 @@ class AlertDecisionAgent:
                 self._db.update_thesis_scores(thesis_id, alert_status="channel_posted")
                 logger.info("AlertDecisionAgent: channel post for thesis #%d (score %.0f)", thesis_id, score)
             # Also send Telegram alert
-            self._alert_agent._send_alert(thesis)
+            self._alert_agent.send_alert(thesis)
             self._db.mark_thesis_alerted(thesis_id)

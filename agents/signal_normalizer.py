@@ -68,15 +68,14 @@ class SignalNormalizerAgent:
                 confidence_score=strength,
             )
 
-            # Update entity heat
-            from agents.entity_heat_tracker import EntityHeatTracker
-            heat_tracker = EntityHeatTracker(self._db)
-            # Lightweight single-entity heat bump
-            self._db.upsert_entity_heat(
-                company=canonical,
-                heat_score=0, signal_velocity=0, contradiction_pressure=0,
-                market_attention=0, investigation_priority=0,
-            )
+            # Ensure entity exists in heat table (EntityHeatTracker.run() will calculate real scores)
+            existing_heat = [h for h in self._db.get_entity_heat(limit=200) if h.get("company") == canonical]
+            if not existing_heat:
+                self._db.upsert_entity_heat(
+                    company=canonical,
+                    heat_score=10, signal_velocity=1, contradiction_pressure=0,
+                    market_attention=5, investigation_priority=0,
+                )
 
             return {
                 "id": signal_id,

@@ -172,10 +172,20 @@ app = FastAPI(title="Oracle v2", version="2.0.0", lifespan=lifespan)
 # ── Utilities ─────────────────────────────────────────────────────────
 
 def _ser(rows: list[dict]) -> list[dict]:
+    from datetime import date, timedelta
+    from decimal import Decimal
     for r in rows:
         for k, v in r.items():
             if isinstance(v, datetime):
                 r[k] = v.isoformat()
+            elif isinstance(v, date):
+                r[k] = v.isoformat()
+            elif isinstance(v, timedelta):
+                r[k] = str(v)
+            elif isinstance(v, Decimal):
+                r[k] = float(v)
+            elif isinstance(v, bytes):
+                r[k] = v.decode("utf-8", errors="replace")
     return rows
 
 
