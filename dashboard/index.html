@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Oracle — Singapore Market Intelligence</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #0a0e17;
+            color: #e0e0e0;
+            min-height: 100vh;
+        }
+        .header {
+            background: linear-gradient(135deg, #0f1724 0%, #1a1f35 100%);
+            border-bottom: 1px solid #1e2a3a;
+            padding: 20px 32px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .header h1 {
+            font-size: 24px;
+            font-weight: 700;
+            color: #fff;
+        }
+        .header h1 span { color: #3b82f6; }
+        .status-bar {
+            display: flex;
+            gap: 24px;
+            font-size: 13px;
+            color: #94a3b8;
+        }
+        .status-bar .stat { display: flex; align-items: center; gap: 6px; }
+        .status-bar .dot {
+            width: 8px; height: 8px;
+            border-radius: 50%;
+            background: #22c55e;
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.4; }
+        }
+        .container { max-width: 1400px; margin: 0 auto; padding: 24px 32px; }
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 16px;
+            margin-bottom: 32px;
+        }
+        .stat-card {
+            background: #111827;
+            border: 1px solid #1e2a3a;
+            border-radius: 12px;
+            padding: 20px;
+        }
+        .stat-card .label { font-size: 13px; color: #64748b; margin-bottom: 4px; }
+        .stat-card .value { font-size: 32px; font-weight: 700; color: #fff; }
+        .stat-card .value.blue { color: #3b82f6; }
+        .stat-card .value.amber { color: #f59e0b; }
+        .stat-card .value.green { color: #22c55e; }
+        .section { margin-bottom: 32px; }
+        .section-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+        }
+        .section-header h2 { font-size: 18px; font-weight: 600; }
+        .section-header .badge {
+            font-size: 12px;
+            padding: 4px 10px;
+            border-radius: 20px;
+            background: #1e293b;
+            color: #94a3b8;
+        }
+        .thesis-card {
+            background: #111827;
+            border: 1px solid #1e2a3a;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 12px;
+            transition: border-color 0.2s;
+        }
+        .thesis-card:hover { border-color: #3b82f6; }
+        .thesis-card .top {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+        .thesis-card .company { font-size: 16px; font-weight: 600; color: #fff; }
+        .confidence-badge {
+            font-size: 13px;
+            font-weight: 600;
+            padding: 4px 12px;
+            border-radius: 20px;
+        }
+        .conf-high { background: rgba(34,197,94,0.15); color: #22c55e; }
+        .conf-med { background: rgba(245,158,11,0.15); color: #f59e0b; }
+        .conf-low { background: rgba(100,116,139,0.15); color: #94a3b8; }
+        .thesis-card .text { font-size: 14px; line-height: 1.6; color: #cbd5e1; margin-bottom: 8px; }
+        .thesis-card .meta { font-size: 12px; color: #475569; }
+        .confidence-bar {
+            width: 100%;
+            height: 4px;
+            background: #1e293b;
+            border-radius: 2px;
+            margin-top: 12px;
+            overflow: hidden;
+        }
+        .confidence-bar .fill {
+            height: 100%;
+            border-radius: 2px;
+            transition: width 0.6s ease;
+        }
+        .signal-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        .signal-table th {
+            text-align: left;
+            font-size: 12px;
+            font-weight: 500;
+            color: #64748b;
+            padding: 10px 12px;
+            border-bottom: 1px solid #1e2a3a;
+        }
+        .signal-table td {
+            font-size: 13px;
+            padding: 12px;
+            border-bottom: 1px solid #111827;
+            color: #cbd5e1;
+        }
+        .signal-table tr:hover td { background: #0f1724; }
+        .type-tag {
+            font-size: 11px;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-weight: 500;
+        }
+        .type-funding { background: rgba(59,130,246,0.15); color: #60a5fa; }
+        .type-acquisition { background: rgba(168,85,247,0.15); color: #c084fc; }
+        .type-launch { background: rgba(34,197,94,0.15); color: #4ade80; }
+        .type-hiring { background: rgba(245,158,11,0.15); color: #fbbf24; }
+        .type-expansion { background: rgba(236,72,153,0.15); color: #f472b6; }
+        .type-general { background: rgba(100,116,139,0.15); color: #94a3b8; }
+        .refresh-btn {
+            background: #1e293b;
+            border: 1px solid #334155;
+            color: #94a3b8;
+            padding: 6px 14px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 13px;
+            transition: all 0.2s;
+        }
+        .refresh-btn:hover { background: #334155; color: #fff; }
+        .empty { text-align: center; padding: 40px; color: #475569; font-size: 14px; }
+        .loading { text-align: center; padding: 40px; color: #64748b; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1><span>Oracle</span> — Singapore Market Intelligence</h1>
+        <div class="status-bar">
+            <div class="stat"><div class="dot"></div> Live</div>
+            <div class="stat" id="last-updated">Updated: —</div>
+        </div>
+    </div>
+
+    <div class="container">
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="label">Signals (24h)</div>
+                <div class="value blue" id="stat-signals">—</div>
+            </div>
+            <div class="stat-card">
+                <div class="label">Total Theses</div>
+                <div class="value amber" id="stat-theses">—</div>
+            </div>
+            <div class="stat-card">
+                <div class="label">High Confidence</div>
+                <div class="value green" id="stat-high">—</div>
+            </div>
+        </div>
+
+        <div class="section">
+            <div class="section-header">
+                <h2>Investment Theses</h2>
+                <button class="refresh-btn" onclick="loadAll()">Refresh</button>
+            </div>
+            <div id="theses-container"><div class="loading">Loading theses...</div></div>
+        </div>
+
+        <div class="section">
+            <div class="section-header">
+                <h2>Recent Signals</h2>
+                <div class="badge" id="signal-count">0 signals</div>
+            </div>
+            <div id="signals-container"><div class="loading">Loading signals...</div></div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = window.location.origin;
+
+        function confClass(c) {
+            if (c >= 75) return 'conf-high';
+            if (c >= 50) return 'conf-med';
+            return 'conf-low';
+        }
+
+        function confColor(c) {
+            if (c >= 75) return '#22c55e';
+            if (c >= 50) return '#f59e0b';
+            return '#64748b';
+        }
+
+        function typeClass(t) {
+            const base = t.replace('hiring_', '');
+            const map = { funding: 'type-funding', acquisition: 'type-acquisition', launch: 'type-launch', expansion: 'type-expansion' };
+            if (t.startsWith('hiring')) return 'type-hiring';
+            return map[base] || 'type-general';
+        }
+
+        function timeAgo(iso) {
+            if (!iso) return '';
+            const diff = Date.now() - new Date(iso).getTime();
+            const mins = Math.floor(diff / 60000);
+            if (mins < 60) return mins + 'm ago';
+            const hrs = Math.floor(mins / 60);
+            if (hrs < 24) return hrs + 'h ago';
+            return Math.floor(hrs / 24) + 'd ago';
+        }
+
+        async function loadStatus() {
+            try {
+                const res = await fetch(API_BASE + '/api/status');
+                const data = await res.json();
+                document.getElementById('stat-signals').textContent = data.signals_24h;
+                document.getElementById('stat-theses').textContent = data.total_theses;
+                document.getElementById('stat-high').textContent = data.high_confidence;
+                document.getElementById('last-updated').textContent = 'Updated: ' + new Date().toLocaleTimeString();
+            } catch (e) {
+                console.error('Status fetch failed', e);
+            }
+        }
+
+        async function loadTheses() {
+            const container = document.getElementById('theses-container');
+            try {
+                const res = await fetch(API_BASE + '/api/theses?limit=10');
+                const data = await res.json();
+                const theses = data.theses || [];
+
+                if (theses.length === 0) {
+                    container.innerHTML = '<div class="empty">No theses generated yet. Agents are collecting signals.</div>';
+                    return;
+                }
+
+                container.innerHTML = theses.map(t => `
+                    <div class="thesis-card">
+                        <div class="top">
+                            <div class="company">${t.company}</div>
+                            <div class="confidence-badge ${confClass(t.confidence)}">${t.confidence.toFixed(0)}%</div>
+                        </div>
+                        <div class="text">${t.thesis_text}</div>
+                        <div class="meta">Evidence: signals ${t.evidence_ids || 'N/A'} &middot; ${timeAgo(t.timestamp)}</div>
+                        <div class="confidence-bar">
+                            <div class="fill" style="width:${t.confidence}%; background:${confColor(t.confidence)}"></div>
+                        </div>
+                    </div>
+                `).join('');
+            } catch (e) {
+                container.innerHTML = '<div class="empty">Failed to load theses.</div>';
+            }
+        }
+
+        async function loadSignals() {
+            const container = document.getElementById('signals-container');
+            try {
+                const res = await fetch(API_BASE + '/api/signals?limit=25');
+                const data = await res.json();
+                const signals = data.signals || [];
+
+                document.getElementById('signal-count').textContent = signals.length + ' signals';
+
+                if (signals.length === 0) {
+                    container.innerHTML = '<div class="empty">No signals collected yet.</div>';
+                    return;
+                }
+
+                container.innerHTML = `
+                    <table class="signal-table">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Company</th>
+                                <th>Source</th>
+                                <th>Type</th>
+                                <th>Signal</th>
+                                <th>Time</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${signals.map(s => `
+                                <tr>
+                                    <td>#${s.id}</td>
+                                    <td style="color:#fff;font-weight:500">${s.company}</td>
+                                    <td>${s.source}</td>
+                                    <td><span class="type-tag ${typeClass(s.signal_type)}">${s.signal_type}</span></td>
+                                    <td>${(s.signal_text || '').substring(0, 120)}...</td>
+                                    <td style="white-space:nowrap">${timeAgo(s.timestamp)}</td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                `;
+            } catch (e) {
+                container.innerHTML = '<div class="empty">Failed to load signals.</div>';
+            }
+        }
+
+        function loadAll() {
+            loadStatus();
+            loadTheses();
+            loadSignals();
+        }
+
+        loadAll();
+        setInterval(loadAll, 30000);
+    </script>
+</body>
+</html>

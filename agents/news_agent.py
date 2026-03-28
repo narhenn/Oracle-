@@ -1,0 +1,227 @@
+import os
+import logging
+from datetime import datetime
+from typing import Optional
+
+import httpx
+from dotenv import load_dotenv
+
+from db.tidb import TiDBClient
+
+load_dotenv()
+
+logger = logging.getLogger(__name__)
+
+BRIGHT_DATA_API_URL = "https://api.brightdata.com/datasets/v3/trigger"
+
+# Bright Data dataset IDs — configure these for your account
+DATASET_IDS = {
+    "e27": os.getenv("BRIGHT_DATA_DATASET_E27", ""),
+    "techinasia": os.getenv("BRIGHT_DATA_DATASET_TIA", ""),
+    "channelnewsasia": os.getenv("BRIGHT_DATA_DATASET_CNA", ""),
+}
+
+SOURCES = [
+    {"name": "e27", "url": "https://e27.co/tag/singapore/"},
+    {"name": "techinasia", "url": "https://www.techinasia.com/news"},
+    {"name": "channelnewsasia", "url": "https://www.channelnewsasia.com/business"},
+]
+
+
+class NewsAgent:
+    """Scrapes Singapore tech news from e27, TechInAsia, and CNA via Bright Data."""
+
+    def __init__(self, db: TiDBClient) -> None:
+        self._db = db
+        self._api_key = os.getenv("BRIGHT_DATA_API_KEY", "")
+        self._client = httpx.Client(timeout=60.0)
+
+    # ── Public ────────────────────────────────────────────────────────
+
+    def run(self) -> list[dict]:
+        """Run a full scrape cycle across all sources. Returns inserted signals."""
+        logger.info("NewsAgent: starting scrape cycle")
+        all_signals: list[dict] = []
+
+        for source in SOURCES:
+            try:
+                raw_articles = self._scrape_source(source["name"], source["url"])
+                signals = self._parse_articles(source["name"], raw_articles)
+                stored = self._store_signals(signals)
+                all_signals.extend(stored)
+                logger.info(
+                    "NewsAgent: %s — scraped %d articles, stored %d signals",
+                    source["name"],
+                    len(raw_articles),
+                    len(stored),
+                )
+            except Exception as e:
+                logger.error("NewsAgent: failed to scrape %s: %s", source["name"], e)
+
+        logger.info("NewsAgent: cycle complete — %d total signals", len(all_signals))
+        return all_signals
+
+    # ── Bright Data Scraping ──────────────────────────────────────────
+
+    def _scrape_source(self, source_name: str, url: str) -> list[dict]:
+        """Trigger a Bright Data scrape and collect results."""
+        dataset_id = DATASET_IDS.get(source_name, "")
+
+        if dataset_id:
+            return self._scrape_via_dataset(dataset_id, url)
+
+        return self._scrape_via_serp(url)
+
+    def _scrape_via_dataset(self, dataset_id: str, url: str) -> list[dict]:
+        """Use a Bright Data dataset collector."""
+        headers = {
+            "Authorization": f"Bearer {self._api_key}",
+            "Content-Type": "application/json",
+        }
+        payload = [{"url": url}]
+
+        response = self._client.post(
+            BRIGHT_DATA_API_URL,
+            headers=headers,
+            params={"dataset_id": dataset_id, "include_errors": "true"},
+            json=payload,
+        )
+        response.raise_for_status()
+        snapshot_id = response.json().get("snapshot_id")
+
+        if not snapshot_id:
+            logger.warning("No snapshot_id returned for dataset %s", dataset_id)
+            return []
+
+        return self._poll_snapshot(snapshot_id)
+
+    def _scrape_via_serp(self, url: str) -> list[dict]:
+        """Fallback: use Bright Data SERP API to search for recent articles."""
+        headers = {
+            "Authorization": f"Bearer {self._api_key}",
+            "Content-Type": "application/json",
+        }
+        search_query = f"site:{url} Singapore startup funding OR acquisition OR launch"
+        payload = [{"url": f"https://www.google.com/search?q={search_query}&tbs=qdr:d"}]
+
+        response = self._client.post(
+            BRIGHT_DATA_API_URL,
+            headers=headers,
+            params={"dataset_id": "gd_l1viktl72bvl7bjuj0", "include_errors": "true"},
+            json=payload,
+        )
+        response.raise_for_status()
+        snapshot_id = response.json().get("snapshot_id")
+
+        if not snapshot_id:
+            return []
+
+        return self._poll_snapshot(snapshot_id)
+
+    def _poll_snapshot(self, snapshot_id: str, max_attempts: int = 10) -> list[dict]:
+        """Poll Bright Data for snapshot results."""
+        import time
+
+        snapshot_url = f"https://api.brightdata.com/datasets/v3/snapshot/{snapshot_id}"
+        headers = {"Authorization": f"Bearer {self._api_key}"}
+
+        for attempt in range(max_attempts):
+            response = self._client.get(snapshot_url, headers=headers, params={"format": "json"})
+
+            if response.status_code == 200:
+                data = response.json()
+                if isinstance(data, list):
+                    return data
+                return []
+            elif response.status_code == 202:
+                wait_time = min(5 * (attempt + 1), 30)
+                logger.debug("Snapshot %s not ready, waiting %ds", snapshot_id, wait_time)
+                time.sleep(wait_time)
+            else:
+                logger.error("Snapshot poll failed: %d %s", response.status_code, response.text)
+                return []
+
+        logger.warning("Snapshot %s timed out after %d attempts", snapshot_id, max_attempts)
+        return []
+
+    # ── Parsing ───────────────────────────────────────────────────────
+
+    def _parse_articles(self, source_name: str, raw_articles: list[dict]) -> list[dict]:
+        """Normalise raw Bright Data output into signal dicts."""
+        signals: list[dict] = []
+
+        for article in raw_articles:
+            title = article.get("title") or article.get("name") or ""
+            description = article.get("description") or article.get("snippet") or ""
+            company = self._extract_company(title, description)
+
+            if not title:
+                continue
+
+            signal_text = f"{title}. {description}".strip()
+            signal_type = self._classify_signal(title, description)
+
+            signals.append({
+                "source": source_name,
+                "company": company,
+                "signal_text": signal_text,
+                "signal_type": signal_type,
+            })
+
+        return signals
+
+    def _extract_company(self, title: str, description: str) -> str:
+        """Best-effort company name extraction from article text."""
+        combined = f"{title} {description}"
+
+        funding_keywords = ["raises", "secures", "funding", "Series", "seed round"]
+        for kw in funding_keywords:
+            if kw.lower() in combined.lower():
+                words = title.split()
+                for i, word in enumerate(words):
+                    if kw.lower() in word.lower() and i > 0:
+                        return words[i - 1].strip(",:;—-")
+
+        return title.split()[0] if title else "Unknown"
+
+    def _classify_signal(self, title: str, description: str) -> str:
+        """Classify the signal type based on keywords."""
+        text = f"{title} {description}".lower()
+
+        categories = {
+            "funding": ["raises", "funding", "series", "seed", "investment", "venture"],
+            "acquisition": ["acquires", "acquisition", "merger", "bought", "takeover"],
+            "launch": ["launches", "launch", "unveils", "introduces", "releases"],
+            "expansion": ["expands", "expansion", "opens", "entering", "new market"],
+            "partnership": ["partners", "partnership", "collaboration", "alliance"],
+            "ipo": ["ipo", "public listing", "goes public"],
+            "layoff": ["layoff", "cuts jobs", "restructur", "downsiz"],
+        }
+
+        for signal_type, keywords in categories.items():
+            if any(kw in text for kw in keywords):
+                return signal_type
+
+        return "general"
+
+    # ── Storage ───────────────────────────────────────────────────────
+
+    def _store_signals(self, signals: list[dict]) -> list[dict]:
+        """Insert parsed signals into TiDB. Returns stored signals with IDs."""
+        stored: list[dict] = []
+        for signal in signals:
+            try:
+                signal_id = self._db.insert_signal(
+                    source=signal["source"],
+                    company=signal["company"],
+                    signal_text=signal["signal_text"],
+                    signal_type=signal["signal_type"],
+                )
+                signal["id"] = signal_id
+                stored.append(signal)
+            except Exception as e:
+                logger.error("Failed to store signal: %s — %s", signal.get("company"), e)
+        return stored
+
+    def close(self) -> None:
+        self._client.close()
