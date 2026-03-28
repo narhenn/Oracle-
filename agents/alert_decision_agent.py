@@ -22,9 +22,10 @@ class AlertDecisionAgent:
         92+      → channel auto-post (if source diversity strong)
     """
 
-    def __init__(self, db: TiDBClient, alert_agent: AlertAgent) -> None:
+    def __init__(self, db: TiDBClient, alert_agent: AlertAgent, policy_agent=None) -> None:
         self._db = db
         self._alert_agent = alert_agent
+        self._policy = policy_agent
 
     def run(self) -> list[dict]:
         """Score all unalerted theses and take appropriate action."""
@@ -45,6 +46,10 @@ class AlertDecisionAgent:
             self._db.update_thesis_scores(thesis["id"], alert_score=round(score, 1))
 
             if action == "no_alert":
+                continue
+
+            # Policy check
+            if self._policy and action in ("telegram_alert", "channel_post") and not self._policy.check("alert", {"thesis_id": thesis["id"]}):
                 continue
 
             # Check minimum evidence floor (policy: no alert without 2 evidence lines)

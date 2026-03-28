@@ -17,6 +17,8 @@ if TYPE_CHECKING:
     from agents.alert_decision_agent import AlertDecisionAgent
     from agents.thesis_state_machine import ThesisStateMachine
     from agents.entity_heat_tracker import EntityHeatTracker
+    from agents.investigation_agent import InvestigationAgent
+    from agents.policy_agent import PolicyAgent
 
 load_dotenv()
 
@@ -76,6 +78,8 @@ class OrchestratorAgent:
         alert_decision: AlertDecisionAgent | None = None,
         state_machine: ThesisStateMachine | None = None,
         heat_tracker: EntityHeatTracker | None = None,
+        investigation_agent: InvestigationAgent | None = None,
+        policy_agent: PolicyAgent | None = None,
     ) -> None:
         self._db = db
         self._alert_agent = alert_agent
@@ -84,6 +88,8 @@ class OrchestratorAgent:
         self._alert_decision = alert_decision
         self._state_machine = state_machine
         self._heat_tracker = heat_tracker
+        self._investigation_agent = investigation_agent
+        self._policy = policy_agent
         self._api_key = os.getenv("AGNES_API_KEY", "")
         self._client = httpx.Client(timeout=120.0)
 
@@ -108,6 +114,9 @@ class OrchestratorAgent:
         stored = self._store_theses(raw_theses)
         logger.info("OrchestratorAgent: generated and stored %d theses", len(stored))
 
+        # Signal relationship detection
+        self._detect_signal_relationships(signals)
+
         # v2: QueryEvolutionAgent replaces simple generate_next_queries
         for thesis in stored:
             if self._query_evolution:
@@ -119,6 +128,12 @@ class OrchestratorAgent:
         if self._contradiction_agent:
             self._contradiction_agent.run()
 
+        # Policy: force contradiction check on unchallenged theses
+        if self._policy:
+            for thesis in stored:
+                if self._policy.prevent_narrative_lockin(thesis["id"]):
+                    logger.info("OrchestratorAgent: narrative lockin check triggered for thesis #%d", thesis["id"])
+
         # v2: ThesisStateMachine — evaluate all thesis states
         if self._state_machine:
             self._state_machine.run_all()
@@ -126,6 +141,10 @@ class OrchestratorAgent:
         # v2: EntityHeatTracker
         if self._heat_tracker:
             self._heat_tracker.run()
+
+        # v2: InvestigationAgent — check triggers
+        if self._investigation_agent:
+            self._investigation_agent.check_triggers(stored)
 
         # v2: AlertDecisionAgent with full formula
         if self._alert_decision:
@@ -207,6 +226,62 @@ class OrchestratorAgent:
         except httpx.RequestError as e:
             logger.error("Agnes API request failed: %s", e)
             return None
+
+    # ── Signal Relationship Detection ─────────────────────────────────
+
+    def _detect_signal_relationships(self, signals: list[dict]) -> int:
+        """Detect relationships between signals about the same entity."""
+        from collections import defaultdict
+        by_company: dict[str, list] = defaultdict(list)
+        for s in signals:
+            by_company[s["company"]].append(s)
+
+        links_created = 0
+        for company, sigs in by_company.items():
+            if len(sigs) < 2:
+                continue
+            for i in range(len(sigs)):
+                for j in range(i + 1, min(len(sigs), i + 5)):  # limit pairs to avoid explosion
+                    s1, s2 = sigs[i], sigs[j]
+                    rel = self._classify_relationship(s1, s2)
+                    if rel:
+                        try:
+                            self._db.insert_signal_link(s1["id"], s2["id"], rel["type"], rel["strength"])
+                            links_created += 1
+                        except Exception:
+                            pass
+
+        if links_created:
+            logger.info("OrchestratorAgent: detected %d signal relationships", links_created)
+        return links_created
+
+    def _classify_relationship(self, s1: dict, s2: dict) -> dict | None:
+        t1 = s1.get("signal_type", "")
+        t2 = s2.get("signal_type", "")
+        src1 = s1.get("source", "")
+        src2 = s2.get("source", "")
+
+        # Independent confirmation: same company, different sources, similar types
+        if src1 != src2 and t1 == t2:
+            return {"type": "independent_confirmation", "strength": 80}
+
+        # Hiring pattern
+        if "hiring" in t1 and "hiring" in t2:
+            return {"type": "corroborating_hiring_pattern", "strength": 70}
+
+        # Funding enables expansion
+        if ("investment" in t1 and "expansion" in t2) or ("expansion" in t1 and "investment" in t2):
+            return {"type": "funding_enables_expansion", "strength": 75}
+
+        # Product + hiring = growth signal
+        if ("product_launch" in t1 and "hiring" in t2) or ("hiring" in t1 and "product_launch" in t2):
+            return {"type": "growth_signal", "strength": 65}
+
+        # Different sources on same topic
+        if src1 != src2:
+            return {"type": "cross_source_coverage", "strength": 50}
+
+        return None
 
     # ── Formatting ────────────────────────────────────────────────────
 

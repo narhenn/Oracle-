@@ -294,6 +294,115 @@ class TiDBClient:
                 )
             """)
 
+            # ── Phase 3 tables ─────────────────────────────────────
+
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS raw_documents (
+                    id                    INT AUTO_INCREMENT PRIMARY KEY,
+                    source_id             INT,
+                    url                   VARCHAR(500),
+                    title                 TEXT,
+                    raw_text              LONGTEXT,
+                    fetch_timestamp       DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    published_timestamp   DATETIME NULL,
+                    extraction_confidence INT DEFAULT 0,
+                    content_hash          VARCHAR(64),
+                    language              VARCHAR(10) DEFAULT 'en',
+                    metadata_json         TEXT,
+                    INDEX idx_source (source_id),
+                    INDEX idx_hash (content_hash),
+                    INDEX idx_fetch (fetch_timestamp)
+                )
+            """)
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS signal_links (
+                    id                INT AUTO_INCREMENT PRIMARY KEY,
+                    signal_id_1       INT NOT NULL,
+                    signal_id_2       INT NOT NULL,
+                    relationship_type VARCHAR(50) NOT NULL,
+                    strength_score    INT DEFAULT 0,
+                    created_at        DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    INDEX idx_sig1 (signal_id_1),
+                    INDEX idx_sig2 (signal_id_2),
+                    INDEX idx_type (relationship_type)
+                )
+            """)
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS system_health (
+                    id              INT AUTO_INCREMENT PRIMARY KEY,
+                    component_name  VARCHAR(100) NOT NULL,
+                    status          VARCHAR(20) DEFAULT 'unknown',
+                    error_rate      FLOAT DEFAULT 0,
+                    avg_latency_ms  INT DEFAULT 0,
+                    backlog_size    INT DEFAULT 0,
+                    recovery_action TEXT,
+                    checked_at      DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE INDEX idx_component (component_name)
+                )
+            """)
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS source_performance_daily (
+                    id                        INT AUTO_INCREMENT PRIMARY KEY,
+                    source_id                 INT NOT NULL,
+                    date                      DATE NOT NULL,
+                    fetch_success_rate        FLOAT DEFAULT 0,
+                    useful_signal_count       INT DEFAULT 0,
+                    avg_novelty_score         FLOAT DEFAULT 0,
+                    avg_reliability_score     FLOAT DEFAULT 0,
+                    false_signal_rate_estimate FLOAT DEFAULT 0,
+                    created_at                DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE INDEX idx_source_date (source_id, date)
+                )
+            """)
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS reports (
+                    id          INT AUTO_INCREMENT PRIMARY KEY,
+                    report_type VARCHAR(50) DEFAULT 'daily_brief',
+                    report_date DATE,
+                    html_content LONGTEXT,
+                    sent_via    VARCHAR(30),
+                    created_at  DATETIME DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS trigger_events (
+                    id              INT AUTO_INCREMENT PRIMARY KEY,
+                    trigger_type    VARCHAR(50) NOT NULL,
+                    urgency_level   VARCHAR(20) DEFAULT 'medium',
+                    target_entities TEXT,
+                    reason          TEXT,
+                    recommended_cycle VARCHAR(20) DEFAULT 'standard',
+                    created_at      DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    INDEX idx_type (trigger_type)
+                )
+            """)
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS investigations (
+                    id            INT AUTO_INCREMENT PRIMARY KEY,
+                    thesis_id     INT NOT NULL,
+                    trigger_reason TEXT,
+                    status        VARCHAR(20) DEFAULT 'pending',
+                    result_type   VARCHAR(30),
+                    findings_summary TEXT,
+                    signals_found INT DEFAULT 0,
+                    created_at    DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    completed_at  DATETIME,
+                    INDEX idx_thesis (thesis_id),
+                    INDEX idx_status (status)
+                )
+            """)
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS policy_log (
+                    id            INT AUTO_INCREMENT PRIMARY KEY,
+                    action_type   VARCHAR(50) NOT NULL,
+                    blocked       BOOLEAN DEFAULT FALSE,
+                    reason        TEXT,
+                    context_json  TEXT,
+                    created_at    DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    INDEX idx_action (action_type)
+                )
+            """)
+
             # Seed default policies
             cursor.execute("""
                 INSERT IGNORE INTO agent_policies (policy_name, current_value, min_value, max_value, adjustment_reason)
@@ -303,7 +412,13 @@ class TiDBClient:
                     ('max_query_expansions_per_thesis', 6, 3, 15, 'Phase 1 default'),
                     ('min_evidence_lines_for_alert', 2, 1, 5, 'Phase 1 default'),
                     ('stale_thesis_days', 7, 3, 30, 'Phase 1 default'),
-                    ('query_expiry_days', 7, 3, 14, 'Phase 1 default')
+                    ('query_expiry_days', 7, 3, 14, 'Phase 1 default'),
+                    ('max_source_auto_adds_per_day', 3, 1, 10, 'Phase 2 default'),
+                    ('source_probation_days', 7, 3, 14, 'Phase 2 default'),
+                    ('min_alert_score_telegram', 85, 60, 95, 'Phase 2 default'),
+                    ('min_alert_score_channel', 92, 80, 100, 'Phase 2 default'),
+                    ('narrative_lockin_hours', 48, 24, 96, 'Phase 2 default'),
+                    ('api_calls_per_hour_limit', 100, 20, 500, 'Phase 2 default')
             """)
 
             # Seed default sources
@@ -317,7 +432,7 @@ class TiDBClient:
                     ('linkedin', 'https://www.linkedin.com/jobs', 'jobs', 'active', 70.0, 'human')
             """)
 
-            logger.info("All v1 + v2 Phase 1 tables created / verified")
+            logger.info("All v2 tables created / verified (Phase 1-3)")
         except Error as e:
             logger.error("Table creation failed: %s", e)
             raise
@@ -977,6 +1092,352 @@ class TiDBClient:
         except Error as e:
             logger.error("get_user_preference failed: %s", e)
             raise
+        finally:
+            cursor.close()
+            conn.close()
+
+    # ── Raw Documents ──────────────────────────────────────────────────
+
+    def insert_raw_document(self, source_id: int, url: str, title: str, raw_text: str,
+                            extraction_confidence: int = 0, content_hash: str = "") -> int:
+        conn = self._get_conn()
+        cursor = conn.cursor()
+        try:
+            cursor.execute(
+                """INSERT INTO raw_documents (source_id, url, title, raw_text, extraction_confidence, content_hash)
+                   VALUES (%s,%s,%s,%s,%s,%s)""",
+                (source_id, url, title, raw_text, extraction_confidence, content_hash),
+            )
+            return cursor.lastrowid
+        except Error as e:
+            logger.error("insert_raw_document failed: %s", e)
+            raise
+        finally:
+            cursor.close()
+            conn.close()
+
+    def get_raw_documents_recent(self, hours: int = 24) -> list[dict]:
+        conn = self._get_conn()
+        cursor = conn.cursor(dictionary=True)
+        try:
+            cursor.execute(
+                "SELECT * FROM raw_documents WHERE fetch_timestamp >= NOW() - INTERVAL %s HOUR ORDER BY fetch_timestamp DESC LIMIT 200",
+                (hours,),
+            )
+            return cursor.fetchall()
+        except Error as e:
+            logger.error("get_raw_documents_recent failed: %s", e)
+            return []
+        finally:
+            cursor.close()
+            conn.close()
+
+    def check_content_hash_exists(self, content_hash: str) -> bool:
+        conn = self._get_conn()
+        cursor = conn.cursor()
+        try:
+            cursor.execute("SELECT 1 FROM raw_documents WHERE content_hash = %s LIMIT 1", (content_hash,))
+            return cursor.fetchone() is not None
+        except Error:
+            return False
+        finally:
+            cursor.close()
+            conn.close()
+
+    # ── Signal Links ───────────────────────────────────────────────────
+
+    def insert_signal_link(self, signal_id_1: int, signal_id_2: int, relationship_type: str, strength_score: int = 50) -> int:
+        conn = self._get_conn()
+        cursor = conn.cursor()
+        try:
+            cursor.execute(
+                "INSERT INTO signal_links (signal_id_1, signal_id_2, relationship_type, strength_score) VALUES (%s,%s,%s,%s)",
+                (signal_id_1, signal_id_2, relationship_type, strength_score),
+            )
+            return cursor.lastrowid
+        except Error as e:
+            logger.error("insert_signal_link failed: %s", e)
+            raise
+        finally:
+            cursor.close()
+            conn.close()
+
+    def get_signal_links_recent(self, hours: int = 24, limit: int = 50) -> list[dict]:
+        conn = self._get_conn()
+        cursor = conn.cursor(dictionary=True)
+        try:
+            cursor.execute(
+                "SELECT * FROM signal_links WHERE created_at >= NOW() - INTERVAL %s HOUR ORDER BY created_at DESC LIMIT %s",
+                (hours, limit),
+            )
+            return cursor.fetchall()
+        except Error as e:
+            return []
+        finally:
+            cursor.close()
+            conn.close()
+
+    # ── System Health ──────────────────────────────────────────────────
+
+    def upsert_system_health(self, component_name: str, status: str, error_rate: float = 0,
+                             avg_latency_ms: int = 0, backlog_size: int = 0, recovery_action: str = None) -> None:
+        conn = self._get_conn()
+        cursor = conn.cursor()
+        try:
+            cursor.execute(
+                """INSERT INTO system_health (component_name, status, error_rate, avg_latency_ms, backlog_size, recovery_action, checked_at)
+                   VALUES (%s,%s,%s,%s,%s,%s,NOW())
+                   ON DUPLICATE KEY UPDATE status=%s, error_rate=%s, avg_latency_ms=%s, backlog_size=%s, recovery_action=%s, checked_at=NOW()""",
+                (component_name, status, error_rate, avg_latency_ms, backlog_size, recovery_action,
+                 status, error_rate, avg_latency_ms, backlog_size, recovery_action),
+            )
+        except Error as e:
+            logger.error("upsert_system_health failed: %s", e)
+        finally:
+            cursor.close()
+            conn.close()
+
+    def get_system_health(self) -> list[dict]:
+        conn = self._get_conn()
+        cursor = conn.cursor(dictionary=True)
+        try:
+            cursor.execute("SELECT * FROM system_health ORDER BY component_name")
+            return cursor.fetchall()
+        except Error as e:
+            return []
+        finally:
+            cursor.close()
+            conn.close()
+
+    # ── Source Performance ─────────────────────────────────────────────
+
+    def upsert_source_performance_daily(self, source_id: int, date: str, fetch_success_rate: float,
+                                        useful_signal_count: int, avg_novelty: float, avg_reliability: float,
+                                        false_signal_rate: float = 0) -> None:
+        conn = self._get_conn()
+        cursor = conn.cursor()
+        try:
+            cursor.execute(
+                """INSERT INTO source_performance_daily (source_id, date, fetch_success_rate, useful_signal_count,
+                   avg_novelty_score, avg_reliability_score, false_signal_rate_estimate)
+                   VALUES (%s,%s,%s,%s,%s,%s,%s)
+                   ON DUPLICATE KEY UPDATE fetch_success_rate=%s, useful_signal_count=%s, avg_novelty_score=%s,
+                   avg_reliability_score=%s, false_signal_rate_estimate=%s""",
+                (source_id, date, fetch_success_rate, useful_signal_count, avg_novelty, avg_reliability, false_signal_rate,
+                 fetch_success_rate, useful_signal_count, avg_novelty, avg_reliability, false_signal_rate),
+            )
+        except Error as e:
+            logger.error("upsert_source_performance_daily failed: %s", e)
+        finally:
+            cursor.close()
+            conn.close()
+
+    def get_source_performance_30d(self, source_id: int) -> list[dict]:
+        conn = self._get_conn()
+        cursor = conn.cursor(dictionary=True)
+        try:
+            cursor.execute(
+                "SELECT * FROM source_performance_daily WHERE source_id = %s AND date >= CURDATE() - INTERVAL 30 DAY ORDER BY date DESC",
+                (source_id,),
+            )
+            return cursor.fetchall()
+        except Error as e:
+            return []
+        finally:
+            cursor.close()
+            conn.close()
+
+    def update_source_quality(self, source_id: int, quality_score: float, reliability_score: float) -> None:
+        self._exec("UPDATE sources SET quality_score=%s, reliability_score=%s WHERE id=%s",
+                    (quality_score, reliability_score, source_id))
+
+    def update_source_status(self, source_id: int, status: str) -> None:
+        self._exec("UPDATE sources SET status=%s WHERE id=%s", (status, source_id))
+
+    def get_sources_by_status(self, status: str) -> list[dict]:
+        conn = self._get_conn()
+        cursor = conn.cursor(dictionary=True)
+        try:
+            cursor.execute("SELECT * FROM sources WHERE status=%s ORDER BY quality_score DESC", (status,))
+            return cursor.fetchall()
+        except Error as e:
+            return []
+        finally:
+            cursor.close()
+            conn.close()
+
+    def insert_source(self, source_name: str, source_url: str, source_type: str = "news",
+                      status: str = "candidate", added_by: str = "oracle") -> int:
+        conn = self._get_conn()
+        cursor = conn.cursor()
+        try:
+            cursor.execute(
+                "INSERT INTO sources (source_name, source_url, source_type, status, added_by) VALUES (%s,%s,%s,%s,%s)",
+                (source_name, source_url, source_type, status, added_by),
+            )
+            return cursor.lastrowid
+        except Error as e:
+            logger.error("insert_source failed: %s", e)
+            raise
+        finally:
+            cursor.close()
+            conn.close()
+
+    # ── Entities ───────────────────────────────────────────────────────
+
+    def upsert_entity(self, canonical_name: str, entity_type: str = "company",
+                      sector: str = None, geography: str = "Singapore") -> int:
+        conn = self._get_conn()
+        cursor = conn.cursor()
+        try:
+            cursor.execute(
+                """INSERT INTO entities (canonical_name, entity_type, sector, geography)
+                   VALUES (%s,%s,%s,%s)
+                   ON DUPLICATE KEY UPDATE sector=COALESCE(%s, sector)""",
+                (canonical_name, entity_type, sector, geography, sector),
+            )
+            cursor.execute("SELECT id FROM entities WHERE canonical_name=%s", (canonical_name,))
+            row = cursor.fetchone()
+            return row[0] if row else 0
+        except Error as e:
+            logger.error("upsert_entity failed: %s", e)
+            return 0
+        finally:
+            cursor.close()
+            conn.close()
+
+    def get_entity_by_name(self, name: str) -> Optional[dict]:
+        conn = self._get_conn()
+        cursor = conn.cursor(dictionary=True)
+        try:
+            cursor.execute("SELECT * FROM entities WHERE canonical_name=%s", (name,))
+            return cursor.fetchone()
+        except Error:
+            return None
+        finally:
+            cursor.close()
+            conn.close()
+
+    # ── Investigations ─────────────────────────────────────────────────
+
+    def insert_investigation(self, thesis_id: int, trigger_reason: str) -> int:
+        conn = self._get_conn()
+        cursor = conn.cursor()
+        try:
+            cursor.execute(
+                "INSERT INTO investigations (thesis_id, trigger_reason) VALUES (%s,%s)",
+                (thesis_id, trigger_reason),
+            )
+            return cursor.lastrowid
+        except Error as e:
+            logger.error("insert_investigation failed: %s", e)
+            raise
+        finally:
+            cursor.close()
+            conn.close()
+
+    def update_investigation(self, inv_id: int, status: str, result_type: str = None,
+                             findings: str = None, signals_found: int = 0) -> None:
+        self._exec(
+            "UPDATE investigations SET status=%s, result_type=%s, findings_summary=%s, signals_found=%s, completed_at=NOW() WHERE id=%s",
+            (status, result_type, findings, signals_found, inv_id),
+        )
+
+    def get_recent_investigations(self, limit: int = 10) -> list[dict]:
+        conn = self._get_conn()
+        cursor = conn.cursor(dictionary=True)
+        try:
+            cursor.execute(
+                """SELECT i.*, t.company, t.thesis_text FROM investigations i
+                   JOIN theses t ON i.thesis_id = t.id ORDER BY i.created_at DESC LIMIT %s""",
+                (limit,),
+            )
+            return cursor.fetchall()
+        except Error as e:
+            return []
+        finally:
+            cursor.close()
+            conn.close()
+
+    def count_investigations_last_hour(self) -> int:
+        conn = self._get_conn()
+        cursor = conn.cursor()
+        try:
+            cursor.execute("SELECT COUNT(*) FROM investigations WHERE created_at >= NOW() - INTERVAL 1 HOUR")
+            return cursor.fetchone()[0]
+        except Error:
+            return 0
+        finally:
+            cursor.close()
+            conn.close()
+
+    # ── Trigger Events ─────────────────────────────────────────────────
+
+    def insert_trigger_event(self, trigger_type: str, urgency: str, target_entities: str,
+                             reason: str, recommended_cycle: str = "standard") -> int:
+        conn = self._get_conn()
+        cursor = conn.cursor()
+        try:
+            cursor.execute(
+                "INSERT INTO trigger_events (trigger_type, urgency_level, target_entities, reason, recommended_cycle) VALUES (%s,%s,%s,%s,%s)",
+                (trigger_type, urgency, target_entities, reason, recommended_cycle),
+            )
+            return cursor.lastrowid
+        except Error as e:
+            logger.error("insert_trigger_event failed: %s", e)
+            return 0
+        finally:
+            cursor.close()
+            conn.close()
+
+    # ── Reports ────────────────────────────────────────────────────────
+
+    def insert_report(self, report_type: str, report_date: str, html_content: str, sent_via: str = "telegram") -> int:
+        conn = self._get_conn()
+        cursor = conn.cursor()
+        try:
+            cursor.execute(
+                "INSERT INTO reports (report_type, report_date, html_content, sent_via) VALUES (%s,%s,%s,%s)",
+                (report_type, report_date, html_content, sent_via),
+            )
+            return cursor.lastrowid
+        except Error as e:
+            logger.error("insert_report failed: %s", e)
+            return 0
+        finally:
+            cursor.close()
+            conn.close()
+
+    # ── Policy Log ─────────────────────────────────────────────────────
+
+    def insert_policy_log(self, action_type: str, blocked: bool, reason: str, context: str = None) -> None:
+        conn = self._get_conn()
+        cursor = conn.cursor()
+        try:
+            cursor.execute(
+                "INSERT INTO policy_log (action_type, blocked, reason, context_json) VALUES (%s,%s,%s,%s)",
+                (action_type, blocked, reason, context),
+            )
+        except Error:
+            pass
+        finally:
+            cursor.close()
+            conn.close()
+
+    def update_policy(self, name: str, new_value: float, adjusted_by: str, reason: str) -> None:
+        self._exec(
+            "UPDATE agent_policies SET current_value=%s, last_adjusted_by=%s, adjustment_reason=%s, updated_at=NOW() WHERE policy_name=%s",
+            (new_value, adjusted_by, reason, name),
+        )
+
+    def get_all_policies(self) -> list[dict]:
+        conn = self._get_conn()
+        cursor = conn.cursor(dictionary=True)
+        try:
+            cursor.execute("SELECT * FROM agent_policies ORDER BY policy_name")
+            return cursor.fetchall()
+        except Error:
+            return []
         finally:
             cursor.close()
             conn.close()
