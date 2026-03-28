@@ -21,6 +21,7 @@ class AlertAgent:
         self._db = db
         self._bot_token = os.getenv("TELEGRAM_BOT_TOKEN", "")
         self._chat_id = os.getenv("TELEGRAM_CHAT_ID", "")
+        self._channel_id = os.getenv("TELEGRAM_CHANNEL_ID", "")
         self._client = httpx.Client(timeout=30.0)
 
     # ── Public ────────────────────────────────────────────────────────
@@ -90,6 +91,37 @@ class AlertAgent:
         except httpx.RequestError as e:
             logger.error("Telegram request failed: %s", e)
             return False
+
+    # ── Channel Posts ──────────────────────────────────────────────────
+
+    def post_to_channel(self, thesis: dict) -> bool:
+        """Post a high-confidence thesis to the public Telegram channel. Only fires at >= 90%."""
+        confidence = thesis.get("confidence", 0)
+        if confidence < 90:
+            return False
+
+        if not self._channel_id:
+            logger.warning("AlertAgent: TELEGRAM_CHANNEL_ID not set, skipping channel post")
+            return False
+
+        bar = self._confidence_bar(confidence)
+        message = (
+            f"<b>\U0001f534 ORACLE HIGH CONFIDENCE ALERT</b>\n\n"
+            f"<b>Company:</b> {thesis.get('company', 'Unknown')}\n"
+            f"<b>Confidence:</b> {confidence:.0f}% {bar}\n\n"
+            f"{thesis.get('thesis_text', 'N/A')}\n\n"
+            f"oracle-sg.zeabur.app"
+        )
+
+        success = self._send_telegram_message(message, chat_id=self._channel_id)
+        if success:
+            logger.info(
+                "AlertAgent: posted thesis #%s to channel (%s, %.0f%%)",
+                thesis.get("id"),
+                thesis.get("company"),
+                confidence,
+            )
+        return success
 
     # ── Formatting ────────────────────────────────────────────────────
 

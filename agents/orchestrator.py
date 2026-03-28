@@ -6,7 +6,14 @@ from typing import Optional
 import httpx
 from dotenv import load_dotenv
 
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
 from db.tidb import TiDBClient
+
+if TYPE_CHECKING:
+    from agents.alert_agent import AlertAgent
 
 load_dotenv()
 
@@ -52,8 +59,9 @@ If the signals don't contain enough information to answer, say so honestly.
 class OrchestratorAgent:
     """Cross-references signals via Agnes-Claw LLM to generate investment theses."""
 
-    def __init__(self, db: TiDBClient) -> None:
+    def __init__(self, db: TiDBClient, alert_agent: AlertAgent | None = None) -> None:
         self._db = db
+        self._alert_agent = alert_agent
         self._api_key = os.getenv("AGNES_API_KEY", "")
         self._client = httpx.Client(timeout=120.0)
 
@@ -80,6 +88,8 @@ class OrchestratorAgent:
 
         for thesis in stored:
             self.generate_next_queries(thesis)
+            if self._alert_agent and thesis.get("confidence", 0) >= 90:
+                self._alert_agent.post_to_channel(thesis)
 
         return stored
 
