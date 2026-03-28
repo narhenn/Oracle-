@@ -162,6 +162,19 @@ async def api_theses(company: str | None = None, min_confidence: float = 0.0, li
         return JSONResponse(content={"error": str(e)}, status_code=500)
 
 
+@app.get("/api/contradictions")
+async def api_contradictions(limit: int = 20):
+    try:
+        contradictions = db.get_contradictions(limit=limit)
+        for c in contradictions:
+            if isinstance(c.get("detected_at"), datetime):
+                c["detected_at"] = c["detected_at"].isoformat()
+        return JSONResponse(content={"contradictions": contradictions})
+    except Exception as e:
+        logger.error("API contradictions error: %s", e)
+        return JSONResponse(content={"error": str(e)}, status_code=500)
+
+
 @app.get("/api/status")
 async def api_status():
     try:

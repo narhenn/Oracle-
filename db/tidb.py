@@ -97,6 +97,18 @@ class TiDBClient:
                 )
             """)
             cursor.execute("""
+                CREATE TABLE IF NOT EXISTS contradictions (
+                    id              INT AUTO_INCREMENT PRIMARY KEY,
+                    thesis_a_id     INT NOT NULL,
+                    thesis_b_id     INT NOT NULL,
+                    contradiction   TEXT NOT NULL,
+                    severity        VARCHAR(10) NOT NULL,
+                    detected_at     DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    INDEX idx_thesis_a (thesis_a_id),
+                    INDEX idx_thesis_b (thesis_b_id)
+                )
+            """)
+            cursor.execute("""
                 CREATE TABLE IF NOT EXISTS trigger_log (
                     id              INT AUTO_INCREMENT PRIMARY KEY,
                     trigger_reason  TEXT NOT NULL,
@@ -288,6 +300,79 @@ class TiDBClient:
             logger.debug("Marked thesis %s as alerted", thesis_id)
         except Error as e:
             logger.error("mark_thesis_alerted failed: %s", e)
+            raise
+        finally:
+            cursor.close()
+            conn.close()
+
+    # ── Contradictions ─────────────────────────────────────────────────
+
+    def insert_contradiction(
+        self,
+        thesis_a_id: int,
+        thesis_b_id: int,
+        contradiction: str,
+        severity: str,
+    ) -> int:
+        conn = self._get_conn()
+        cursor = conn.cursor()
+        try:
+            cursor.execute(
+                """
+                INSERT INTO contradictions (thesis_a_id, thesis_b_id, contradiction, severity)
+                VALUES (%s, %s, %s, %s)
+                """,
+                (thesis_a_id, thesis_b_id, contradiction, severity),
+            )
+            cid = cursor.lastrowid
+            logger.debug("Inserted contradiction %s between thesis %s and %s", cid, thesis_a_id, thesis_b_id)
+            return cid
+        except Error as e:
+            logger.error("insert_contradiction failed: %s", e)
+            raise
+        finally:
+            cursor.close()
+            conn.close()
+
+    def get_contradictions(self, limit: int = 20) -> list[dict]:
+        conn = self._get_conn()
+        cursor = conn.cursor(dictionary=True)
+        try:
+            cursor.execute(
+                """
+                SELECT c.*,
+                       ta.company AS company_a, ta.thesis_text AS thesis_a_text, ta.confidence AS confidence_a,
+                       tb.company AS company_b, tb.thesis_text AS thesis_b_text, tb.confidence AS confidence_b
+                FROM contradictions c
+                JOIN theses ta ON c.thesis_a_id = ta.id
+                JOIN theses tb ON c.thesis_b_id = tb.id
+                ORDER BY c.detected_at DESC LIMIT %s
+                """,
+                (limit,),
+            )
+            return cursor.fetchall()
+        except Error as e:
+            logger.error("get_contradictions failed: %s", e)
+            raise
+        finally:
+            cursor.close()
+            conn.close()
+
+    def get_theses_since_days(self, days: int = 7) -> list[dict]:
+        conn = self._get_conn()
+        cursor = conn.cursor(dictionary=True)
+        try:
+            cursor.execute(
+                """
+                SELECT * FROM theses
+                WHERE timestamp >= NOW() - INTERVAL %s DAY
+                ORDER BY timestamp DESC
+                """,
+                (days,),
+            )
+            return cursor.fetchall()
+        except Error as e:
+            logger.error("get_theses_since_days failed: %s", e)
             raise
         finally:
             cursor.close()

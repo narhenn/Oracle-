@@ -158,6 +158,36 @@
             transition: all 0.2s;
         }
         .refresh-btn:hover { background: #334155; color: #fff; }
+        .contradiction-card {
+            background: #111827;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 12px;
+            transition: border-color 0.2s;
+        }
+        .contradiction-card.sev-high { border: 1px solid #ef4444; }
+        .contradiction-card.sev-medium { border: 1px solid #f59e0b; }
+        .contradiction-card.sev-low { border: 1px solid #475569; }
+        .contradiction-card .sev-badge {
+            font-size: 11px;
+            font-weight: 600;
+            padding: 2px 8px;
+            border-radius: 4px;
+            text-transform: uppercase;
+        }
+        .sev-badge.high { background: rgba(239,68,68,0.15); color: #ef4444; }
+        .sev-badge.medium { background: rgba(245,158,11,0.15); color: #f59e0b; }
+        .sev-badge.low { background: rgba(100,116,139,0.15); color: #94a3b8; }
+        .contradiction-card .pair {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            margin-bottom: 8px;
+            font-size: 13px;
+            color: #94a3b8;
+        }
+        .contradiction-card .pair .name { color: #fff; font-weight: 500; }
+        .contradiction-card .desc { font-size: 14px; line-height: 1.6; color: #cbd5e1; }
         .empty { text-align: center; padding: 40px; color: #475569; font-size: 14px; }
         .loading { text-align: center; padding: 40px; color: #64748b; }
     </style>
@@ -193,6 +223,14 @@
                 <button class="refresh-btn" onclick="loadAll()">Refresh</button>
             </div>
             <div id="theses-container"><div class="loading">Loading theses...</div></div>
+        </div>
+
+        <div class="section" id="contradictions-section" style="display:none">
+            <div class="section-header">
+                <h2>Conflicting Signals Detected</h2>
+                <div class="badge" id="contradiction-count">0</div>
+            </div>
+            <div id="contradictions-container"></div>
         </div>
 
         <div class="section">
@@ -324,9 +362,44 @@
             }
         }
 
+        async function loadContradictions() {
+            const section = document.getElementById('contradictions-section');
+            const container = document.getElementById('contradictions-container');
+            try {
+                const res = await fetch(API_BASE + '/api/contradictions?limit=10');
+                const data = await res.json();
+                const items = data.contradictions || [];
+
+                if (items.length === 0) {
+                    section.style.display = 'none';
+                    return;
+                }
+
+                section.style.display = 'block';
+                document.getElementById('contradiction-count').textContent = items.length;
+
+                container.innerHTML = items.map(c => `
+                    <div class="contradiction-card sev-${c.severity}">
+                        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+                            <div class="pair">
+                                <span class="name">${c.company_a || 'Thesis #'+c.thesis_a_id}</span>
+                                <span>vs</span>
+                                <span class="name">${c.company_b || 'Thesis #'+c.thesis_b_id}</span>
+                            </div>
+                            <span class="sev-badge ${c.severity}">${c.severity}</span>
+                        </div>
+                        <div class="desc">${c.contradiction}</div>
+                    </div>
+                `).join('');
+            } catch (e) {
+                section.style.display = 'none';
+            }
+        }
+
         function loadAll() {
             loadStatus();
             loadTheses();
+            loadContradictions();
             loadSignals();
         }
 

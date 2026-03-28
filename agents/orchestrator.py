@@ -91,6 +91,8 @@ class OrchestratorAgent:
             if self._alert_agent and thesis.get("confidence", 0) >= 90:
                 self._alert_agent.post_to_channel(thesis)
 
+        self.detect_contradictions()
+
         return stored
 
     def query(self, user_question: str, user_telegram_id: Optional[str] = None) -> str:
@@ -285,6 +287,66 @@ class OrchestratorAgent:
             thesis_id,
         )
         return stored_queries
+
+    # ── Contradiction Detection ──────────────────────────────────────
+
+    def detect_contradictions(self) -> list[dict]:
+        """Scan recent theses for contradictions via Agnes-Claw."""
+        theses = self._db.get_theses_since_days(days=7)
+        if len(theses) <= 2:
+            logger.debug("OrchestratorAgent: not enough theses for contradiction check")
+            return []
+
+        theses_text = "\n".join(
+            f"[Thesis #{t['id']}] {t['company']} (confidence: {t['confidence']}%): {t['thesis_text']}"
+            for t in theses
+        )
+
+        prompt = (
+            "You are a critical analyst. Review these investment theses about "
+            f"Singapore companies:\n\n{theses_text}\n\n"
+            "Identify any contradictions or conflicts between them. "
+            "For example: one thesis says sector is growing, another says contracting.\n\n"
+            "Return ONLY a JSON array of objects:\n"
+            '[{"thesis_a_id": int, "thesis_b_id": int, "contradiction": "one sentence", '
+            '"severity": "high/medium/low"}]\n'
+            "Return empty array [] if no contradictions found."
+        )
+
+        raw_contradictions = self._call_agnes(
+            "You are a critical analyst. Return ONLY valid JSON. No other text.",
+            prompt,
+        )
+
+        if not raw_contradictions:
+            logger.info("OrchestratorAgent: no contradictions detected")
+            return []
+
+        valid_ids = {t["id"] for t in theses}
+        stored: list[dict] = []
+
+        for c in raw_contradictions:
+            a_id = c.get("thesis_a_id")
+            b_id = c.get("thesis_b_id")
+            text = c.get("contradiction", "")
+            severity = c.get("severity", "low")
+
+            if a_id not in valid_ids or b_id not in valid_ids:
+                continue
+            if not text:
+                continue
+            if severity not in ("high", "medium", "low"):
+                severity = "low"
+
+            try:
+                cid = self._db.insert_contradiction(a_id, b_id, text, severity)
+                stored.append({"id": cid, "thesis_a_id": a_id, "thesis_b_id": b_id,
+                               "contradiction": text, "severity": severity})
+            except Exception as e:
+                logger.error("Failed to store contradiction: %s", e)
+
+        logger.info("OrchestratorAgent: detected and stored %d contradictions", len(stored))
+        return stored
 
     def close(self) -> None:
         self._client.close()
