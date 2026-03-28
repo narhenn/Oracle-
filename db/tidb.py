@@ -2,6 +2,7 @@ import os
 import logging
 from typing import Optional
 
+import certifi
 import mysql.connector
 from mysql.connector import pooling, Error
 from dotenv import load_dotenv
@@ -16,12 +17,16 @@ class TiDBClient:
 
     def __init__(self) -> None:
         self._pool: Optional[pooling.MySQLConnectionPool] = None
+        ssl_ca_path = "/etc/ssl/certs/ca-certificates.crt"
+        if not os.path.exists(ssl_ca_path):
+            ssl_ca_path = certifi.where()
+
         self._config = {
             "host": os.getenv("TIDB_HOST"),
             "user": os.getenv("TIDB_USER"),
             "password": os.getenv("TIDB_PASSWORD"),
             "database": os.getenv("TIDB_DATABASE", "oracle_db"),
-            "ssl_ca": "",
+            "ssl_ca": ssl_ca_path,
             "ssl_verify_cert": True,
             "ssl_verify_identity": True,
             "autocommit": True,
