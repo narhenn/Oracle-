@@ -4,122 +4,563 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Oracle v2 — Autonomous Market Intelligence</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
     <style>
         *{margin:0;padding:0;box-sizing:border-box}
-        body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#0a0e17;color:#e0e0e0;min-height:100vh}
-        .header{background:linear-gradient(135deg,#0f1724,#1a1f35);border-bottom:1px solid #1e2a3a;padding:20px 32px;display:flex;justify-content:space-between;align-items:center}
-        .header h1{font-size:24px;font-weight:700;color:#fff}
-        .header h1 span{color:#3b82f6}
-        .v2-badge{font-size:11px;background:#3b82f6;color:#fff;padding:2px 8px;border-radius:4px;margin-left:8px}
-        .status-bar{display:flex;gap:24px;font-size:13px;color:#94a3b8}
-        .status-bar .stat{display:flex;align-items:center;gap:6px}
-        .status-bar .dot{width:8px;height:8px;border-radius:50%;background:#22c55e;animation:pulse 2s infinite}
-        @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
-        .container{max-width:1500px;margin:0 auto;padding:24px 32px}
-        .stats-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:24px}
-        .stat-card{background:#111827;border:1px solid #1e2a3a;border-radius:12px;padding:20px}
-        .stat-card .label{font-size:13px;color:#64748b;margin-bottom:4px}
-        .stat-card .value{font-size:32px;font-weight:700;color:#fff}
-        .stat-card .value.blue{color:#3b82f6}.stat-card .value.amber{color:#f59e0b}.stat-card .value.green{color:#22c55e}.stat-card .value.red{color:#ef4444}
-        .section{margin-bottom:24px}
-        .section-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
-        .section-header h2{font-size:18px;font-weight:600}
-        .badge{font-size:12px;padding:4px 10px;border-radius:20px;background:#1e293b;color:#94a3b8}
-        .two-col{display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-bottom:24px}
-        .three-col{display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-bottom:24px}
-        @media(max-width:1000px){.two-col,.three-col{grid-template-columns:1fr}.stats-grid{grid-template-columns:repeat(2,1fr)}}
 
-        /* Cards */
-        .card{background:#111827;border:1px solid #1e2a3a;border-radius:12px;padding:16px;margin-bottom:8px}
-        .card:hover{border-color:#3b82f6}
-        .card .top{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
-        .card .company{font-size:16px;font-weight:600;color:#fff}
-        .card .text{font-size:14px;line-height:1.6;color:#cbd5e1;margin-bottom:6px}
-        .card .meta{font-size:12px;color:#475569}
-        .card .scores{display:flex;gap:10px;margin-top:6px;font-size:11px;color:#64748b;flex-wrap:wrap}
+        :root {
+            --bg: #f5f5f7;
+            --card-bg: rgba(255,255,255,0.72);
+            --card-border: rgba(0,0,0,0.06);
+            --card-shadow: 0 2px 20px rgba(0,0,0,0.04), 0 0 1px rgba(0,0,0,0.08);
+            --card-hover-shadow: 0 8px 40px rgba(0,0,0,0.08), 0 0 1px rgba(0,0,0,0.1);
+            --text-primary: #1d1d1f;
+            --text-secondary: #6e6e73;
+            --text-tertiary: #86868b;
+            --divider: rgba(0,0,0,0.06);
+            --accent-blue: #0071e3;
+            --accent-purple: #bf5af2;
+            --accent-green: #30d158;
+            --accent-orange: #ff9f0a;
+            --accent-red: #ff3b30;
+            --accent-pink: #ff375f;
+            --accent-teal: #5ac8fa;
+            --accent-indigo: #5856d6;
+            --gradient-hero: linear-gradient(135deg, #1d1d1f 0%, #2d2d3f 50%, #1d1d1f 100%);
+        }
 
-        /* Badges */
-        .confidence-badge{font-size:13px;font-weight:600;padding:4px 12px;border-radius:20px}
-        .conf-high{background:rgba(34,197,94,.15);color:#22c55e}
-        .conf-med{background:rgba(245,158,11,.15);color:#f59e0b}
-        .conf-low{background:rgba(100,116,139,.15);color:#94a3b8}
-        .state-badge{font-size:10px;font-weight:600;padding:3px 8px;border-radius:4px;text-transform:uppercase;letter-spacing:.5px}
-        .state-candidate{background:rgba(100,116,139,.15);color:#94a3b8}
-        .state-emerging{background:rgba(59,130,246,.15);color:#60a5fa}
-        .state-developing{background:rgba(168,85,247,.15);color:#c084fc}
-        .state-strong{background:rgba(34,197,94,.15);color:#4ade80}
-        .state-actionable{background:rgba(34,197,94,.3);color:#22c55e;border:1px solid #22c55e}
-        .state-conflicted{background:rgba(239,68,68,.15);color:#f87171}
-        .state-stale{background:rgba(100,116,139,.1);color:#64748b}
-        .sev-badge{font-size:11px;font-weight:600;padding:2px 8px;border-radius:4px;text-transform:uppercase}
-        .sev-badge.hard,.sev-badge.high{background:rgba(239,68,68,.15);color:#ef4444}
-        .sev-badge.soft,.sev-badge.medium{background:rgba(245,158,11,.15);color:#f59e0b}
-        .sev-badge.outdated,.sev-badge.low{background:rgba(100,116,139,.15);color:#94a3b8}
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', sans-serif;
+            background: var(--bg);
+            color: var(--text-primary);
+            min-height: 100vh;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
 
-        /* Health dots */
-        .health-row{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid #1e2a3a;font-size:13px}
-        .health-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
-        .health-dot.healthy{background:#22c55e}
-        .health-dot.degraded{background:#f59e0b}
-        .health-dot.critical{background:#ef4444}
-        .health-dot.unknown{background:#475569}
-        .health-name{flex:1;color:#cbd5e1}
-        .health-latency{color:#64748b;font-size:12px}
+        /* === HERO HEADER === */
+        .header {
+            background: var(--gradient-hero);
+            padding: 48px 40px 52px;
+            text-align: center;
+            position: relative;
+            overflow: hidden;
+        }
+        .header::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(ellipse at 30% 50%, rgba(88,86,214,0.15) 0%, transparent 50%),
+                        radial-gradient(ellipse at 70% 50%, rgba(0,113,227,0.12) 0%, transparent 50%),
+                        radial-gradient(ellipse at 50% 80%, rgba(191,90,242,0.1) 0%, transparent 50%);
+            animation: aurora 20s ease infinite;
+        }
+        @keyframes aurora {
+            0%,100%{transform:translate(0,0) rotate(0deg)}
+            25%{transform:translate(-2%,1%) rotate(1deg)}
+            50%{transform:translate(1%,-1%) rotate(-0.5deg)}
+            75%{transform:translate(-1%,2%) rotate(0.5deg)}
+        }
+        .header-content {
+            position: relative;
+            z-index: 1;
+        }
+        .header h1 {
+            font-size: 48px;
+            font-weight: 800;
+            letter-spacing: -0.03em;
+            background: linear-gradient(135deg, #fff 0%, rgba(255,255,255,0.8) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 8px;
+        }
+        .header .subtitle {
+            font-size: 18px;
+            font-weight: 400;
+            color: rgba(255,255,255,0.55);
+            letter-spacing: -0.01em;
+        }
+        .header .status-bar {
+            display: flex;
+            justify-content: center;
+            gap: 28px;
+            margin-top: 20px;
+            font-size: 13px;
+            font-weight: 500;
+            color: rgba(255,255,255,0.45);
+        }
+        .header .stat {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .header .dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--accent-green);
+            box-shadow: 0 0 12px rgba(48,209,88,0.5);
+            animation: pulse 2.5s ease infinite;
+        }
+        @keyframes pulse {
+            0%,100%{opacity:1;box-shadow:0 0 12px rgba(48,209,88,0.5)}
+            50%{opacity:.6;box-shadow:0 0 20px rgba(48,209,88,0.3)}
+        }
 
-        /* Heat */
-        .heat-card{background:#111827;border:1px solid #1e2a3a;border-radius:12px;padding:14px;margin-bottom:6px;display:flex;justify-content:space-between;align-items:center}
-        .heat-card .left{display:flex;align-items:center;gap:10px}
-        .heat-card .rank{font-size:18px;font-weight:700;color:#334155;width:24px}
-        .heat-card .name{font-size:14px;font-weight:600;color:#fff}
-        .heat-bar{width:100px;height:5px;background:#1e293b;border-radius:3px;overflow:hidden}
-        .heat-bar .fill{height:100%;border-radius:3px}
-        .heat-val{font-size:14px;font-weight:600;min-width:35px;text-align:right}
+        /* === CONTAINER === */
+        .container {
+            max-width: 1440px;
+            margin: -28px auto 0;
+            padding: 0 32px 60px;
+            position: relative;
+            z-index: 2;
+        }
 
-        /* State dist */
-        .state-dist{display:flex;gap:8px;flex-wrap:wrap}
-        .state-chip{font-size:12px;padding:6px 12px;border-radius:8px;background:#1e293b;display:flex;align-items:center;gap:6px}
-        .state-chip .count{font-weight:700;color:#fff}
+        /* === STATS GRID === */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 16px;
+            margin-bottom: 32px;
+        }
+        .stat-card {
+            background: var(--card-bg);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid var(--card-border);
+            border-radius: 20px;
+            padding: 24px 24px 20px;
+            box-shadow: var(--card-shadow);
+            transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+        }
+        .stat-card:hover {
+            box-shadow: var(--card-hover-shadow);
+            transform: translateY(-2px);
+        }
+        .stat-card .label {
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--text-tertiary);
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            margin-bottom: 8px;
+        }
+        .stat-card .value {
+            font-size: 40px;
+            font-weight: 800;
+            letter-spacing: -0.03em;
+            line-height: 1;
+        }
+        .stat-card .value.blue {
+            background: linear-gradient(135deg, #0071e3, #5ac8fa);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        .stat-card .value.amber {
+            background: linear-gradient(135deg, #ff9f0a, #ff375f);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        .stat-card .value.green {
+            background: linear-gradient(135deg, #30d158, #5ac8fa);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        .stat-card .value.red {
+            background: linear-gradient(135deg, #ff3b30, #ff9f0a);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
 
-        /* Table */
-        .signal-table{width:100%;border-collapse:collapse}
-        .signal-table th{text-align:left;font-size:12px;font-weight:500;color:#64748b;padding:10px 12px;border-bottom:1px solid #1e2a3a}
-        .signal-table td{font-size:13px;padding:10px 12px;border-bottom:1px solid #111827;color:#cbd5e1}
-        .signal-table tr:hover td{background:#0f1724}
-        .type-tag{font-size:11px;padding:2px 8px;border-radius:4px;font-weight:500}
-        .type-funding{background:rgba(59,130,246,.15);color:#60a5fa}
-        .type-acquisition{background:rgba(168,85,247,.15);color:#c084fc}
-        .type-launch{background:rgba(34,197,94,.15);color:#4ade80}
-        .type-hiring{background:rgba(245,158,11,.15);color:#fbbf24}
-        .type-expansion{background:rgba(236,72,153,.15);color:#f472b6}
-        .type-general{background:rgba(100,116,139,.15);color:#94a3b8}
+        /* === SECTIONS === */
+        .section {
+            margin-bottom: 28px;
+        }
+        .section-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+        }
+        .section-header h2 {
+            font-size: 22px;
+            font-weight: 700;
+            letter-spacing: -0.02em;
+            color: var(--text-primary);
+        }
+        .badge {
+            font-size: 12px;
+            font-weight: 600;
+            padding: 4px 12px;
+            border-radius: 100px;
+            background: rgba(0,113,227,0.1);
+            color: var(--accent-blue);
+        }
 
-        .refresh-btn{background:#1e293b;border:1px solid #334155;color:#94a3b8;padding:6px 14px;border-radius:8px;cursor:pointer;font-size:13px}
-        .refresh-btn:hover{background:#334155;color:#fff}
-        .empty{text-align:center;padding:30px;color:#475569;font-size:14px}
-        .mini-card{background:#111827;border:1px solid #1e2a3a;border-radius:8px;padding:12px;margin-bottom:6px;font-size:13px}
+        /* === LAYOUT GRIDS === */
+        .two-col {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 24px;
+            margin-bottom: 28px;
+        }
+        .three-col {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 16px;
+            margin-bottom: 28px;
+        }
+        @media(max-width:1000px) {
+            .two-col,.three-col{grid-template-columns:1fr}
+            .stats-grid{grid-template-columns:repeat(2,1fr)}
+        }
+        @media(max-width:600px) {
+            .stats-grid{grid-template-columns:1fr}
+            .header h1{font-size:32px}
+            .container{padding:0 16px 40px}
+        }
+
+        /* === CARDS === */
+        .card {
+            background: var(--card-bg);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid var(--card-border);
+            border-radius: 16px;
+            padding: 20px;
+            margin-bottom: 12px;
+            box-shadow: var(--card-shadow);
+            transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+        }
+        .card:hover {
+            box-shadow: var(--card-hover-shadow);
+            transform: translateY(-1px);
+        }
+        .card .top {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        .card .company {
+            font-size: 17px;
+            font-weight: 700;
+            color: var(--text-primary);
+            letter-spacing: -0.01em;
+        }
+        .card .text {
+            font-size: 14px;
+            line-height: 1.65;
+            color: var(--text-secondary);
+            margin-bottom: 10px;
+        }
+        .card .meta {
+            font-size: 12px;
+            color: var(--text-tertiary);
+        }
+        .card .scores {
+            display: flex;
+            gap: 8px;
+            margin-top: 8px;
+            font-size: 11px;
+            color: var(--text-tertiary);
+            flex-wrap: wrap;
+        }
+        .card .scores span {
+            background: rgba(0,0,0,0.04);
+            padding: 3px 8px;
+            border-radius: 6px;
+        }
+
+        /* === CONFIDENCE BADGES === */
+        .confidence-badge {
+            font-size: 13px;
+            font-weight: 700;
+            padding: 5px 14px;
+            border-radius: 100px;
+        }
+        .conf-high {
+            background: linear-gradient(135deg, rgba(48,209,88,0.15), rgba(90,200,250,0.1));
+            color: #248a3d;
+        }
+        .conf-med {
+            background: linear-gradient(135deg, rgba(255,159,10,0.15), rgba(255,55,95,0.08));
+            color: #c93400;
+        }
+        .conf-low {
+            background: rgba(0,0,0,0.05);
+            color: var(--text-tertiary);
+        }
+
+        /* === STATE BADGES === */
+        .state-badge {
+            font-size: 10px;
+            font-weight: 700;
+            padding: 4px 10px;
+            border-radius: 6px;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+        }
+        .state-candidate { background: rgba(0,0,0,0.05); color: var(--text-tertiary); }
+        .state-emerging { background: rgba(0,113,227,0.1); color: #0071e3; }
+        .state-developing { background: rgba(191,90,242,0.1); color: #bf5af2; }
+        .state-strong { background: rgba(48,209,88,0.12); color: #248a3d; }
+        .state-actionable { background: linear-gradient(135deg, rgba(48,209,88,0.2), rgba(90,200,250,0.15)); color: #248a3d; border: 1px solid rgba(48,209,88,0.3); }
+        .state-conflicted { background: rgba(255,59,48,0.1); color: #ff3b30; }
+        .state-stale { background: rgba(0,0,0,0.03); color: #aeaeb2; }
+
+        .sev-badge {
+            font-size: 11px;
+            font-weight: 700;
+            padding: 3px 10px;
+            border-radius: 6px;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+        }
+        .sev-badge.hard,.sev-badge.high { background: rgba(255,59,48,0.1); color: #ff3b30; }
+        .sev-badge.soft,.sev-badge.medium { background: rgba(255,159,10,0.1); color: #c93400; }
+        .sev-badge.outdated,.sev-badge.low { background: rgba(0,0,0,0.05); color: var(--text-tertiary); }
+
+        /* === HEALTH === */
+        .health-row {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px 0;
+            border-bottom: 1px solid var(--divider);
+            font-size: 14px;
+        }
+        .health-row:last-child { border-bottom: none; }
+        .health-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            flex-shrink: 0;
+        }
+        .health-dot.healthy { background: var(--accent-green); box-shadow: 0 0 8px rgba(48,209,88,0.4); }
+        .health-dot.degraded { background: var(--accent-orange); box-shadow: 0 0 8px rgba(255,159,10,0.4); }
+        .health-dot.critical { background: var(--accent-red); box-shadow: 0 0 8px rgba(255,59,48,0.4); }
+        .health-dot.unknown { background: #aeaeb2; }
+        .health-name { flex: 1; color: var(--text-primary); font-weight: 500; }
+        .health-latency { color: var(--text-tertiary); font-size: 13px; font-weight: 500; }
+
+        /* === HEAT MAP === */
+        .heat-card {
+            background: var(--card-bg);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid var(--card-border);
+            border-radius: 14px;
+            padding: 14px 18px;
+            margin-bottom: 8px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: var(--card-shadow);
+            transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+        }
+        .heat-card:hover {
+            box-shadow: var(--card-hover-shadow);
+            transform: translateY(-1px);
+        }
+        .heat-card .left { display: flex; align-items: center; gap: 12px; }
+        .heat-card .rank {
+            font-size: 16px;
+            font-weight: 800;
+            color: #d1d1d6;
+            width: 24px;
+            text-align: center;
+        }
+        .heat-card .name { font-size: 14px; font-weight: 600; color: var(--text-primary); }
+        .heat-bar {
+            width: 120px;
+            height: 6px;
+            background: rgba(0,0,0,0.06);
+            border-radius: 100px;
+            overflow: hidden;
+        }
+        .heat-bar .fill { height: 100%; border-radius: 100px; }
+        .heat-val { font-size: 15px; font-weight: 700; min-width: 35px; text-align: right; }
+
+        /* === STATE DISTRIBUTION === */
+        .state-dist { display: flex; gap: 10px; flex-wrap: wrap; }
+        .state-chip {
+            font-size: 13px;
+            font-weight: 500;
+            padding: 8px 16px;
+            border-radius: 100px;
+            background: var(--card-bg);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid var(--card-border);
+            box-shadow: var(--card-shadow);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            transition: all 0.3s ease;
+        }
+        .state-chip:hover { box-shadow: var(--card-hover-shadow); transform: translateY(-1px); }
+        .state-chip .count { font-weight: 800; color: var(--text-primary); }
+
+        /* === TABLE === */
+        .table-wrapper {
+            background: var(--card-bg);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid var(--card-border);
+            border-radius: 16px;
+            box-shadow: var(--card-shadow);
+            overflow: hidden;
+        }
+        .signal-table { width: 100%; border-collapse: collapse; }
+        .signal-table th {
+            text-align: left;
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--text-tertiary);
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            padding: 14px 16px;
+            border-bottom: 1px solid var(--divider);
+            background: rgba(0,0,0,0.02);
+        }
+        .signal-table td {
+            font-size: 13px;
+            padding: 14px 16px;
+            border-bottom: 1px solid var(--divider);
+            color: var(--text-secondary);
+        }
+        .signal-table tr:last-child td { border-bottom: none; }
+        .signal-table tr:hover td { background: rgba(0,113,227,0.03); }
+
+        .type-tag {
+            font-size: 11px;
+            font-weight: 600;
+            padding: 3px 10px;
+            border-radius: 6px;
+        }
+        .type-funding { background: rgba(0,113,227,0.08); color: #0071e3; }
+        .type-acquisition { background: rgba(191,90,242,0.08); color: #bf5af2; }
+        .type-launch { background: rgba(48,209,88,0.08); color: #248a3d; }
+        .type-hiring { background: rgba(255,159,10,0.08); color: #c93400; }
+        .type-expansion { background: rgba(255,55,95,0.08); color: #ff375f; }
+        .type-general { background: rgba(0,0,0,0.04); color: var(--text-tertiary); }
+
+        /* === BUTTONS === */
+        .refresh-btn {
+            background: var(--accent-blue);
+            border: none;
+            color: #fff;
+            padding: 8px 20px;
+            border-radius: 100px;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 600;
+            font-family: inherit;
+            transition: all 0.2s ease;
+            letter-spacing: -0.01em;
+        }
+        .refresh-btn:hover {
+            background: #0077ed;
+            transform: scale(1.03);
+            box-shadow: 0 4px 16px rgba(0,113,227,0.3);
+        }
+        .refresh-btn:active { transform: scale(0.97); }
+
+        /* === MISC === */
+        .empty {
+            text-align: center;
+            padding: 40px;
+            color: var(--text-tertiary);
+            font-size: 14px;
+            font-weight: 500;
+        }
+        .mini-card {
+            background: var(--card-bg);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid var(--card-border);
+            border-radius: 12px;
+            padding: 14px 16px;
+            margin-bottom: 8px;
+            font-size: 13px;
+            color: var(--text-secondary);
+            box-shadow: var(--card-shadow);
+            transition: all 0.3s ease;
+        }
+        .mini-card:hover {
+            box-shadow: var(--card-hover-shadow);
+            transform: translateY(-1px);
+        }
+        .mini-card b { color: var(--text-primary); }
+
+        /* Section cards wrapper for health & heat */
+        .section-card {
+            background: var(--card-bg);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid var(--card-border);
+            border-radius: 20px;
+            padding: 24px;
+            box-shadow: var(--card-shadow);
+        }
+
+        /* Smooth fade-in for loaded content */
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(8px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .card, .heat-card, .mini-card, .health-row, .state-chip {
+            animation: fadeIn 0.4s ease both;
+        }
+
+        /* Scrollbar styling */
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.15); border-radius: 100px; }
+        ::-webkit-scrollbar-thumb:hover { background: rgba(0,0,0,0.25); }
     </style>
 </head>
 <body>
     <div class="header">
-        <h1><span>Oracle</span> — Autonomous Market Intelligence <span class="v2-badge">v2</span></h1>
-        <div class="status-bar">
-            <div class="stat"><div class="dot"></div> Live</div>
-            <div class="stat" id="last-updated">—</div>
+        <div class="header-content">
+            <h1>Oracle</h1>
+            <div class="subtitle">Autonomous Market Intelligence</div>
+            <div class="status-bar">
+                <div class="stat"><div class="dot"></div> Live</div>
+                <div class="stat" id="last-updated"></div>
+            </div>
         </div>
     </div>
     <div class="container">
         <div class="stats-grid">
-            <div class="stat-card"><div class="label">Signals (24h)</div><div class="value blue" id="s-signals">—</div></div>
-            <div class="stat-card"><div class="label">Active Theses</div><div class="value amber" id="s-theses">—</div></div>
-            <div class="stat-card"><div class="label">High Confidence</div><div class="value green" id="s-high">—</div></div>
-            <div class="stat-card"><div class="label">Hottest Entity</div><div class="value red" id="s-hot" style="font-size:18px">—</div></div>
+            <div class="stat-card"><div class="label">Signals (24h)</div><div class="value blue" id="s-signals">&mdash;</div></div>
+            <div class="stat-card"><div class="label">Active Theses</div><div class="value amber" id="s-theses">&mdash;</div></div>
+            <div class="stat-card"><div class="label">High Confidence</div><div class="value green" id="s-high">&mdash;</div></div>
+            <div class="stat-card"><div class="label">Hottest Entity</div><div class="value red" id="s-hot" style="font-size:20px">&mdash;</div></div>
         </div>
 
         <div class="section"><div class="section-header"><h2>Thesis States</h2></div><div class="state-dist" id="state-dist"></div></div>
 
         <div class="two-col">
-            <div class="section"><div class="section-header"><h2>System Health</h2></div><div id="health-container"></div></div>
-            <div class="section"><div class="section-header"><h2>Entity Heat Map</h2></div><div id="heat-container"></div></div>
+            <div class="section">
+                <div class="section-header"><h2>System Health</h2></div>
+                <div class="section-card" id="health-container"></div>
+            </div>
+            <div class="section">
+                <div class="section-header"><h2>Entity Heat Map</h2></div>
+                <div id="heat-container"></div>
+            </div>
         </div>
 
         <div class="section">
@@ -140,7 +581,7 @@
 
         <div class="three-col">
             <div class="section">
-                <div class="section-header"><h2>Signal Relationships</h2></div>
+                <div class="section-header"><h2>Signal Links</h2></div>
                 <div id="links-container"><div class="empty">Loading...</div></div>
             </div>
             <div class="section">
@@ -161,7 +602,7 @@
     <script>
         const A=window.location.origin;
         const cc=c=>c>=75?'conf-high':c>=50?'conf-med':'conf-low';
-        const hc=h=>h>=70?'#ef4444':h>=40?'#f59e0b':'#3b82f6';
+        const hc=h=>h>=70?'#ff3b30':h>=40?'#ff9f0a':'#0071e3';
         const tc=t=>{if(t.startsWith('hiring'))return'type-hiring';return{funding:'type-funding',acquisition:'type-acquisition',launch:'type-launch',expansion:'type-expansion'}[t]||'type-general'};
         const ta=i=>{if(!i)return'';const d=Date.now()-new Date(i).getTime(),m=Math.floor(d/6e4);return m<60?m+'m':m<1440?Math.floor(m/60)+'h':Math.floor(m/1440)+'d'};
 
@@ -172,9 +613,9 @@
                 document.getElementById('s-theses').textContent=d.total_theses;
                 document.getElementById('s-high').textContent=d.high_confidence;
                 if(d.hottest_entities&&d.hottest_entities.length)document.getElementById('s-hot').textContent=d.hottest_entities[0].company+' ('+(d.hottest_entities[0].heat||0).toFixed(0)+')';
-                document.getElementById('last-updated').textContent='Updated: '+new Date().toLocaleTimeString();
-                const colors={candidate:'#94a3b8',emerging:'#60a5fa',developing:'#c084fc',strong:'#4ade80',actionable:'#22c55e',conflicted:'#f87171',stale:'#64748b'};
-                if(d.active_states)document.getElementById('state-dist').innerHTML=Object.entries(d.active_states).filter(([,v])=>v>0).map(([k,v])=>`<div class="state-chip"><span style="color:${colors[k]||'#94a3b8'}">${k}</span><span class="count">${v}</span></div>`).join('');
+                document.getElementById('last-updated').textContent='Updated '+new Date().toLocaleTimeString();
+                const colors={candidate:'#86868b',emerging:'#0071e3',developing:'#bf5af2',strong:'#248a3d',actionable:'#30d158',conflicted:'#ff3b30',stale:'#aeaeb2'};
+                if(d.active_states)document.getElementById('state-dist').innerHTML=Object.entries(d.active_states).filter(([,v])=>v>0).map(([k,v])=>`<div class="state-chip"><span style="color:${colors[k]||'#86868b'}">${k}</span><span class="count">${v}</span></div>`).join('');
             }catch(e){console.error(e)}
         }
 
@@ -184,7 +625,7 @@
                 const d=(await(await fetch(A+'/api/system-health')).json()).components||[];
                 if(!d.length){c.innerHTML='<div class="empty">No health data</div>';return}
                 c.innerHTML=d.map(h=>`<div class="health-row"><div class="health-dot ${h.status}"></div><div class="health-name">${h.component_name}</div><div class="health-latency">${h.avg_latency_ms||0}ms</div></div>`).join('');
-            }catch(e){c.innerHTML='<div class="empty">—</div>'}
+            }catch(e){c.innerHTML='<div class="empty">&mdash;</div>'}
         }
 
         async function loadHeat(){
@@ -192,8 +633,8 @@
             try{
                 const d=(await(await fetch(A+'/api/entity-heat?limit=8')).json()).entities||[];
                 if(!d.length){c.innerHTML='<div class="empty">No heat data</div>';return}
-                c.innerHTML=d.map((h,i)=>`<div class="heat-card"><div class="left"><div class="rank">${i+1}</div><div><div class="name">${h.company}</div><div style="font-size:11px;color:#64748b">vel:${(h.signal_velocity||0).toFixed(1)}/d</div></div></div><div style="display:flex;align-items:center;gap:10px"><div class="heat-bar"><div class="fill" style="width:${h.heat_score}%;background:${hc(h.heat_score)}"></div></div><div class="heat-val" style="color:${hc(h.heat_score)}">${(h.heat_score||0).toFixed(0)}</div></div></div>`).join('');
-            }catch(e){c.innerHTML='<div class="empty">—</div>'}
+                c.innerHTML=d.map((h,i)=>`<div class="heat-card"><div class="left"><div class="rank">${i+1}</div><div><div class="name">${h.company}</div><div style="font-size:11px;color:var(--text-tertiary)">vel: ${(h.signal_velocity||0).toFixed(1)}/d</div></div></div><div style="display:flex;align-items:center;gap:12px"><div class="heat-bar"><div class="fill" style="width:${h.heat_score}%;background:${hc(h.heat_score)}"></div></div><div class="heat-val" style="color:${hc(h.heat_score)}">${(h.heat_score||0).toFixed(0)}</div></div></div>`).join('');
+            }catch(e){c.innerHTML='<div class="empty">&mdash;</div>'}
         }
 
         async function loadTheses(){
@@ -201,8 +642,8 @@
             try{
                 const d=(await(await fetch(A+'/api/theses?limit=10')).json()).theses||[];
                 if(!d.length){c.innerHTML='<div class="empty">No theses yet</div>';return}
-                c.innerHTML=d.map(t=>`<div class="card"><div class="top"><div class="company">${t.company}</div><div style="display:flex;gap:6px"><span class="state-badge state-${t.thesis_state||'candidate'}">${t.thesis_state||'candidate'}</span><span class="confidence-badge ${cc(t.confidence)}">${t.confidence.toFixed(0)}%</span></div></div><div class="text">${t.thesis_text}</div><div class="scores">${t.alert_score?`<span>Alert:${t.alert_score.toFixed(0)}</span>`:''} ${t.urgency_score?`<span>Urg:${t.urgency_score.toFixed(0)}</span>`:''} ${t.evidence_strength_score?`<span>Ev:${t.evidence_strength_score.toFixed(0)}</span>`:''} ${t.source_diversity_score?`<span>Div:${t.source_diversity_score.toFixed(0)}</span>`:''} ${t.contradiction_score?`<span style="color:#f87171">C:${t.contradiction_score.toFixed(0)}</span>`:''}</div><div class="meta">${ta(t.timestamp)} ago &middot; Evidence: ${t.evidence_ids||'—'}</div></div>`).join('');
-            }catch(e){c.innerHTML='<div class="empty">Failed</div>'}
+                c.innerHTML=d.map(t=>`<div class="card"><div class="top"><div class="company">${t.company}</div><div style="display:flex;gap:8px;align-items:center"><span class="state-badge state-${t.thesis_state||'candidate'}">${t.thesis_state||'candidate'}</span><span class="confidence-badge ${cc(t.confidence)}">${t.confidence.toFixed(0)}%</span></div></div><div class="text">${t.thesis_text}</div><div class="scores">${t.alert_score?`<span>Alert ${t.alert_score.toFixed(0)}</span>`:''} ${t.urgency_score?`<span>Urgency ${t.urgency_score.toFixed(0)}</span>`:''} ${t.evidence_strength_score?`<span>Evidence ${t.evidence_strength_score.toFixed(0)}</span>`:''} ${t.source_diversity_score?`<span>Diversity ${t.source_diversity_score.toFixed(0)}</span>`:''} ${t.contradiction_score?`<span style="color:#ff3b30">Contradiction ${t.contradiction_score.toFixed(0)}</span>`:''}</div><div class="meta">${ta(t.timestamp)} ago &middot; Evidence: ${t.evidence_ids||'&mdash;'}</div></div>`).join('');
+            }catch(e){c.innerHTML='<div class="empty">Failed to load</div>'}
         }
 
         async function loadContradictions(){
@@ -211,7 +652,7 @@
                 const d=(await(await fetch(A+'/api/contradictions?limit=8')).json()).contradictions||[];
                 if(!d.length){s.style.display='none';return}
                 s.style.display='block';document.getElementById('c-count').textContent=d.length;
-                c.innerHTML=d.map(x=>`<div class="card" style="border-color:${x.severity==='hard'?'#ef4444':'#f59e0b'}"><div class="top"><div style="font-size:13px;color:#94a3b8"><span style="color:#fff">${x.company_a||'#'+x.thesis_a_id}</span> vs <span style="color:#fff">${x.company_b||'#'+x.thesis_b_id}</span></div><span class="sev-badge ${x.severity}">${x.severity}</span></div><div class="text">${x.contradiction}</div></div>`).join('');
+                c.innerHTML=d.map(x=>`<div class="card" style="border-color:${x.severity==='hard'?'rgba(255,59,48,0.3)':'rgba(255,159,10,0.3)'}"><div class="top"><div style="font-size:13px;color:var(--text-secondary)"><span style="color:var(--text-primary);font-weight:600">${x.company_a||'#'+x.thesis_a_id}</span> vs <span style="color:var(--text-primary);font-weight:600">${x.company_b||'#'+x.thesis_b_id}</span></div><span class="sev-badge ${x.severity}">${x.severity}</span></div><div class="text">${x.contradiction}</div></div>`).join('');
             }catch(e){s.style.display='none'}
         }
 
@@ -222,9 +663,9 @@
                 const active=d.active||[],prob=d.probation||[],ret=d.retired||[];
                 const oracle=active.filter(s=>s.added_by==='oracle').length;
                 c.innerHTML=`<div class="mini-card"><b>${active.length}</b> active &middot; <b>${prob.length}</b> probation &middot; <b>${oracle}</b> Oracle-discovered</div>`+
-                    active.slice(0,3).map(s=>`<div class="mini-card">${s.source_name} — quality <b>${(s.quality_score||0).toFixed(0)}</b></div>`).join('')+
-                    (ret.length?`<div class="mini-card" style="border-color:#ef4444">${ret.length} retired</div>`:'');
-            }catch(e){c.innerHTML='<div class="empty">—</div>'}
+                    active.slice(0,3).map(s=>`<div class="mini-card">${s.source_name} &mdash; quality <b>${(s.quality_score||0).toFixed(0)}</b></div>`).join('')+
+                    (ret.length?`<div class="mini-card" style="border-color:rgba(255,59,48,0.2)">${ret.length} retired</div>`:'');
+            }catch(e){c.innerHTML='<div class="empty">&mdash;</div>'}
         }
 
         async function loadLinks(){
@@ -234,7 +675,7 @@
                 if(!d.length){c.innerHTML='<div class="empty">No links yet</div>';return}
                 const types={};d.forEach(l=>{types[l.relationship_type]=(types[l.relationship_type]||0)+1});
                 c.innerHTML=Object.entries(types).map(([k,v])=>`<div class="mini-card">${k.replace(/_/g,' ')} <b>${v}</b></div>`).join('');
-            }catch(e){c.innerHTML='<div class="empty">—</div>'}
+            }catch(e){c.innerHTML='<div class="empty">&mdash;</div>'}
         }
 
         async function loadInvestigations(){
@@ -242,8 +683,8 @@
             try{
                 const d=(await(await fetch(A+'/api/investigations')).json()).investigations||[];
                 if(!d.length){c.innerHTML='<div class="empty">No investigations</div>';return}
-                c.innerHTML=d.slice(0,5).map(i=>`<div class="mini-card"><b>${i.company||'#'+i.thesis_id}</b> — ${i.status} ${i.result_type?'('+i.result_type+')':''}<div style="font-size:11px;color:#64748b">${i.trigger_reason||''}</div></div>`).join('');
-            }catch(e){c.innerHTML='<div class="empty">—</div>'}
+                c.innerHTML=d.slice(0,5).map(i=>`<div class="mini-card"><b>${i.company||'#'+i.thesis_id}</b> &mdash; ${i.status} ${i.result_type?'('+i.result_type+')':''}<div style="font-size:11px;color:var(--text-tertiary);margin-top:4px">${i.trigger_reason||''}</div></div>`).join('');
+            }catch(e){c.innerHTML='<div class="empty">&mdash;</div>'}
         }
 
         async function loadPolicies(){
@@ -251,8 +692,8 @@
             try{
                 const d=(await(await fetch(A+'/api/policies')).json()).policies||[];
                 if(!d.length){c.innerHTML='<div class="empty">No policies</div>';return}
-                c.innerHTML=d.slice(0,6).map(p=>`<div class="mini-card" style="display:flex;justify-content:space-between"><span>${p.policy_name.replace(/_/g,' ')}</span><b>${p.current_value}</b></div>`).join('');
-            }catch(e){c.innerHTML='<div class="empty">—</div>'}
+                c.innerHTML=d.slice(0,6).map(p=>`<div class="mini-card" style="display:flex;justify-content:space-between;align-items:center"><span style="color:var(--text-secondary)">${p.policy_name.replace(/_/g,' ')}</span><b>${p.current_value}</b></div>`).join('');
+            }catch(e){c.innerHTML='<div class="empty">&mdash;</div>'}
         }
 
         async function loadSignals(){
@@ -261,8 +702,8 @@
                 const d=(await(await fetch(A+'/api/signals?limit=20')).json()).signals||[];
                 document.getElementById('sig-count').textContent=d.length;
                 if(!d.length){c.innerHTML='<div class="empty">No signals</div>';return}
-                c.innerHTML=`<table class="signal-table"><thead><tr><th>ID</th><th>Company</th><th>Source</th><th>Type</th><th>Signal</th><th>Time</th></tr></thead><tbody>${d.map(s=>`<tr><td>#${s.id}</td><td style="color:#fff;font-weight:500">${s.company}</td><td>${s.source}</td><td><span class="type-tag ${tc(s.signal_type)}">${s.signal_type}</span></td><td>${(s.signal_text||'').substring(0,100)}...</td><td style="white-space:nowrap">${ta(s.timestamp)}</td></tr>`).join('')}</tbody></table>`;
-            }catch(e){c.innerHTML='<div class="empty">Failed</div>'}
+                c.innerHTML=`<div class="table-wrapper"><table class="signal-table"><thead><tr><th>ID</th><th>Company</th><th>Source</th><th>Type</th><th>Signal</th><th>Time</th></tr></thead><tbody>${d.map(s=>`<tr><td style="color:var(--text-tertiary)">#${s.id}</td><td style="color:var(--text-primary);font-weight:600">${s.company}</td><td>${s.source}</td><td><span class="type-tag ${tc(s.signal_type)}">${s.signal_type}</span></td><td>${(s.signal_text||'').substring(0,100)}...</td><td style="white-space:nowrap;color:var(--text-tertiary)">${ta(s.timestamp)}</td></tr>`).join('')}</tbody></table></div>`;
+            }catch(e){c.innerHTML='<div class="empty">Failed to load</div>'}
         }
 
         function loadAll(){loadStatus();loadHealth();loadHeat();loadTheses();loadContradictions();loadSources();loadLinks();loadInvestigations();loadPolicies();loadSignals()}
