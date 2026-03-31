@@ -205,7 +205,7 @@ class OrchestratorAgent:
             "Content-Type": "application/json",
         }
         payload = {
-            "model": "agnes-claw-v1",
+            "model": os.getenv("AGNES_MODEL", "gemini-2.0-flash"),
             "messages": [
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_message},
