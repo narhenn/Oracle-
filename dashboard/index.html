@@ -125,7 +125,7 @@
         /* === STATS GRID === */
         .stats-grid {
             display: grid;
-            grid-template-columns: repeat(4, 1fr);
+            grid-template-columns: repeat(3, 1fr);
             gap: 16px;
             margin-bottom: 32px;
         }
@@ -222,7 +222,7 @@
         }
         @media(max-width:1000px) {
             .two-col,.three-col{grid-template-columns:1fr}
-            .stats-grid{grid-template-columns:repeat(2,1fr)}
+            .stats-grid{grid-template-columns:repeat(3,1fr)}
         }
         @media(max-width:600px) {
             .stats-grid{grid-template-columns:1fr}
@@ -548,6 +548,8 @@
             <div class="stat-card"><div class="label">Active Theses</div><div class="value amber" id="s-theses">&mdash;</div></div>
             <div class="stat-card"><div class="label">High Confidence</div><div class="value green" id="s-high">&mdash;</div></div>
             <div class="stat-card"><div class="label">Hottest Entity</div><div class="value red" id="s-hot" style="font-size:20px">&mdash;</div></div>
+            <div class="stat-card"><div class="label">Contradictions</div><div class="value" id="s-contradictions" style="background:linear-gradient(135deg,#ff375f,#bf5af2);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text">&mdash;</div></div>
+            <div class="stat-card"><div class="label">Active Sources</div><div class="value" id="s-sources" style="background:linear-gradient(135deg,#5856d6,#5ac8fa);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text">&mdash;</div></div>
         </div>
 
         <div class="section"><div class="section-header"><h2>Thesis States</h2></div><div class="state-dist" id="state-dist"></div></div>
@@ -617,6 +619,8 @@
                 const colors={candidate:'#86868b',emerging:'#0071e3',developing:'#bf5af2',strong:'#248a3d',actionable:'#30d158',conflicted:'#ff3b30',stale:'#aeaeb2'};
                 if(d.active_states)document.getElementById('state-dist').innerHTML=Object.entries(d.active_states).filter(([,v])=>v>0).map(([k,v])=>`<div class="state-chip"><span style="color:${colors[k]||'#86868b'}">${k}</span><span class="count">${v}</span></div>`).join('');
             }catch(e){console.error(e)}
+            try{const cd=(await(await fetch(A+'/api/contradictions?limit=100')).json()).contradictions||[];document.getElementById('s-contradictions').textContent=cd.length}catch(e){}
+            try{const sd=await(await fetch(A+'/api/sources')).json();document.getElementById('s-sources').textContent=(sd.active||[]).length}catch(e){}
         }
 
         async function loadHealth(){
