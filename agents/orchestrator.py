@@ -24,7 +24,7 @@ load_dotenv()
 
 logger = logging.getLogger(__name__)
 
-AGNES_API_URL = "https://api.agnesclaw.com/v1/chat/completions"
+AGNES_API_URL = os.getenv("AGNES_API_URL", "https://api.agnesclaw.com/v1/chat/completions")
 
 SYSTEM_PROMPT = """You are Oracle, a Singapore market intelligence analyst. You receive raw signals — news articles and strategic hiring data — about Singapore tech companies.
 
